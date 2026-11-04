@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -19,10 +20,6 @@ const NAV_LINKS = [
   { href: "/services", labelKey: "services" as const },
 ];
 
-// The Home nav item is icon-only (see NAV_LINKS rendering below) while every
-// other item stays text — this is the one icon shared between the desktop
-// and mobile nav markup, so it's extracted instead of duplicated inline like
-// the header's other one-off SVGs.
 function HomeIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -46,24 +43,24 @@ function HomeIcon({ className }: { className?: string }) {
 export default function Header() {
   const router = useRouter();
   const pathname = usePathname();
+
   const { isAuthenticated, roles, firstName, logout } = useAuth();
+
+  // Members use the combined Dashboard instead of a separate Profile page.
+  const isMember = roles.includes("Member");
+
   const { language } = useLanguage();
   const t = headerTranslations[language];
   const commonT = commonTranslations[language];
 
   const [needsMembershipCompletion, setNeedsMembershipCompletion] =
     useState(false);
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Registration only ever collects name/NIDA/phone/password — `region` is
-  // set solely by the onboarding/mobile-money form's PATCH /members/me
-  // (see MobileMoneyAccountForm.tsx), so its presence is a reliable signal
-  // that a member has already been through onboarding at least once. A
-  // Member who hasn't yet gets a "Complete Membership" entry here instead
-  // of being redirected straight into that form after login.
+  // Check whether a Member has completed membership onboarding.
   useEffect(() => {
-    if (!isAuthenticated || !roles.includes("Member")) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing to an external signal (auth/role state), not derivable during render
+    if (!isAuthenticated || !isMember) {
       setNeedsMembershipCompletion(false);
       return;
     }
@@ -78,16 +75,14 @@ export default function Header() {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((response) => (response.ok ? response.json() : null))
-      .then((profile) => setNeedsMembershipCompletion(!!profile && !profile.region))
+      .then((profile) =>
+        setNeedsMembershipCompletion(!!profile && !profile.region)
+      )
       .catch(() => setNeedsMembershipCompletion(false));
-  }, [isAuthenticated, roles]);
+  }, [isAuthenticated, isMember]);
 
-  // Depending on which device (screen size) the visitor is on: below the
-  // `md` breakpoint the desktop nav/profile dropdown are hidden and this
-  // hamburger-driven panel is the only way to reach them, so close it on
-  // every route change rather than leaving it open behind the new page.
+  // Close the mobile menu whenever the route changes.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing to an external signal (route change), not derivable during render
     setMobileMenuOpen(false);
   }, [pathname]);
 
@@ -99,10 +94,6 @@ export default function Header() {
 
   return (
     <header className="bg-emerald-900/95 backdrop-blur-sm border-b border-emerald-800 fixed top-0 left-0 w-full z-50 pt-[env(safe-area-inset-top,0px)] pl-[env(safe-area-inset-left,0px)] pr-[env(safe-area-inset-right,0px)]">
-      {/* pt-/pl-/pr- above are on the fixed bar itself (not this inner
-          content div) so the dark background still fills the notch/
-          corner area edge-to-edge and only the actual content shifts
-          inward — same pattern as Sidebar.tsx's mobile top bar. */}
 
       <div className="max-w-7xl mx-auto px-6 py-4 max-md:px-4 max-md:py-3 flex items-center justify-between">
 
@@ -121,9 +112,8 @@ export default function Header() {
           </p>
         </div>
 
-        {/* Navigation Menu (desktop) */}
+        {/* Desktop navigation */}
         <nav className="hidden md:flex items-center space-x-8">
-
           {NAV_LINKS.map((link) =>
             link.href === "/" ? (
               <Link
@@ -145,37 +135,29 @@ export default function Header() {
               </Link>
             )
           )}
-
         </nav>
 
         <div className="flex items-center gap-3">
 
-          {/* Language Toggle */}
+          {/* Language switcher */}
           <LanguageSwitcher />
 
-          {/* Authentication Buttons (desktop) — hidden on mobile since the
-              profile menu below relies on :hover, which doesn't work on a
-              touch device; the hamburger panel covers mobile instead. */}
+          {/* Desktop authentication menu */}
           <div className="hidden md:flex items-center gap-3">
 
             {isAuthenticated ? (
-
               <div className="relative group">
 
                 <button
                   type="button"
                   className="
-                  flex
-                  items-center
-                  gap-2
-                  border
-                  border-white
-                  text-white
-                  px-5 py-2
-                  rounded-lg
-                  group-hover:bg-white
-                  group-hover:text-emerald-900
-                  transition-colors duration-300 ease-in-out"
+                    flex items-center gap-2
+                    border border-white text-white
+                    px-5 py-2 rounded-lg
+                    group-hover:bg-white
+                    group-hover:text-emerald-900
+                    transition-colors duration-300 ease-in-out
+                  "
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -191,27 +173,20 @@ export default function Header() {
                       d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"
                     />
                   </svg>
-                  {firstName || "Profile"}
+
+                  {firstName || "Account"}
                 </button>
 
-                {/* Hover dropdown — pt-2 (not the button's own margin) keeps
-                    the hoverable area continuous down to the menu, so moving
-                    the cursor from the button into the menu doesn't lose
-                    :hover along the way. */}
+                {/* Desktop dropdown */}
                 <div
                   className="
-                  absolute
-                  right-0
-                  top-full
-                  w-48
-                  pt-2
-                  opacity-0
-                  invisible
-                  group-hover:opacity-100
-                  group-hover:visible
-                  transition"
+                    absolute right-0 top-full w-48 pt-2
+                    opacity-0 invisible
+                    group-hover:opacity-100
+                    group-hover:visible
+                    transition
+                  "
                 >
-
                   <div className="rounded-lg border border-gray-100 bg-white py-2 shadow-xl">
 
                     {needsMembershipCompletion && (
@@ -223,12 +198,15 @@ export default function Header() {
                       </Link>
                     )}
 
-                    <Link
-                      href="/profile"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-green-600"
-                    >
-                      {t.profile}
-                    </Link>
+                    {/* Profile is available to non-Member roles only. */}
+                    {!isMember && (
+                      <Link
+                        href="/profile"
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-green-600"
+                      >
+                        {t.profile}
+                      </Link>
+                    )}
 
                     <Link
                       href="/settings"
@@ -246,22 +224,18 @@ export default function Header() {
                     </button>
 
                   </div>
-
                 </div>
 
               </div>
-
             ) : (
-
               <>
                 <Link
                   href="/login"
                   className="
-                  text-white
-                  font-medium
-                  px-2 py-2
-                  hover:text-emerald-300
-                  transition-colors duration-300 ease-in-out"
+                    text-white font-medium px-2 py-2
+                    hover:text-emerald-300
+                    transition-colors duration-300 ease-in-out
+                  "
                 >
                   {t.login}
                 </Link>
@@ -269,23 +243,20 @@ export default function Header() {
                 <Link
                   href="/register"
                   className="
-                  bg-black
-                  text-white
-                  font-semibold
-                  px-4 py-2
-                  rounded-md
-                  hover:bg-gray-900
-                  transition-colors duration-300 ease-in-out"
+                    bg-black text-white font-semibold
+                    px-4 py-2 rounded-md
+                    hover:bg-gray-900
+                    transition-colors duration-300 ease-in-out
+                  "
                 >
-                 {t.getStarted}
+                  {t.getStarted}
                 </Link>
               </>
-
             )}
 
           </div>
 
-          {/* Hamburger toggle (mobile only) */}
+          {/* Mobile hamburger button */}
           <button
             type="button"
             onClick={() => setMobileMenuOpen((open) => !open)}
@@ -329,7 +300,6 @@ export default function Header() {
           </button>
 
         </div>
-
       </div>
 
       {/* Mobile menu panel */}
@@ -337,7 +307,6 @@ export default function Header() {
         <div className="md:hidden border-t border-emerald-800 bg-emerald-900 px-4 py-4">
 
           <nav className="flex flex-col space-y-1">
-
             {NAV_LINKS.map((link) =>
               link.href === "/" ? (
                 <Link
@@ -359,13 +328,11 @@ export default function Header() {
                 </Link>
               )
             )}
-
           </nav>
 
           <div className="mt-3 border-t border-emerald-800 pt-3">
 
             {isAuthenticated ? (
-
               <div className="flex flex-col space-y-1">
 
                 {firstName && (
@@ -383,12 +350,15 @@ export default function Header() {
                   </Link>
                 )}
 
-                <Link
-                  href="/profile"
-                  className="rounded-lg px-3 py-2 text-sm text-white transition-colors duration-300 ease-in-out hover:bg-emerald-800 hover:text-emerald-300"
-                >
-                  {t.profile}
-                </Link>
+                {/* Profile is available to non-Member roles only. */}
+                {!isMember && (
+                  <Link
+                    href="/profile"
+                    className="rounded-lg px-3 py-2 text-sm text-white transition-colors duration-300 ease-in-out hover:bg-emerald-800 hover:text-emerald-300"
+                  >
+                    {t.profile}
+                  </Link>
+                )}
 
                 <Link
                   href="/settings"
@@ -406,9 +376,7 @@ export default function Header() {
                 </button>
 
               </div>
-
             ) : (
-
               <div className="flex flex-col gap-2">
 
                 <Link
@@ -426,11 +394,9 @@ export default function Header() {
                 </Link>
 
               </div>
-
             )}
 
           </div>
-
         </div>
       )}
 

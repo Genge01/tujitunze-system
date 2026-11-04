@@ -1081,13 +1081,11 @@ function AddPhoneNumberSection({
           method: "POST",
           headers,
           body: JSON.stringify({
-            operatorId: Number(form.operatorId),
             phoneNumber: form.phoneNumber,
             simType: form.simType,
           }),
         }
       );
-
       const data = await response.json();
 
       if (!response.ok) {

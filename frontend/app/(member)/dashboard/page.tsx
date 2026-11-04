@@ -2,388 +2,785 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import type { ComponentType, SVGProps } from "react";
-
-import { getAccessToken } from "@/lib/utils/permissions";
-import { useMembershipGate } from "@/lib/hooks/useMembershipGate";
-import { useLanguage } from "@/lib/context/LanguageContext";
-import { memberDashboardTranslations } from "@/constants/translations/member-dashboard";
-import { commonTranslations } from "@/constants/translations/common";
-import { API_URL } from "@/lib/utils/api";
-import PageContainer from "@/components/dashboard/PageContainer";
-import SectionHeader from "@/components/dashboard/SectionHeader";
-import MembershipGateSpinner from "@/components/dashboard/MembershipGateSpinner";
 import {
-  BellIcon,
-  CoinsIcon,
-  ShieldIcon,
-  WalletIcon,
-} from "@/components/common/SidebarIcons";
-import Overview from "./Overview";
+  Activity,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  Coins,
+  HeartPulse,
+  IdCard,
+  Mail,
+  ShieldCheck,
+  TrendingUp,
+  UserRound,
+  Wallet,
+  XCircle,
+} from "lucide-react";
 
-interface Wallet {
-  balance: number;
+import { API_URL } from "@/lib/utils/api";
+import { getAccessToken } from "@/lib/utils/permissions";
+
+type Data = Record<string, any>;
+
+interface DashboardData {
+  member: Data;
+  membership: Data;
 }
 
-interface InsurancePolicy {
-  policy_status: string;
-  provider_name: string;
-  start_date: string;
-}
+/* -------------------------------------------------------
+ *   HELPER FUNCTIONS
+ * ------------------------------------------------------- */
 
-interface SavingsSummary {
-  totalSavedTzs: number;
-}
+const getValue = (obj: Data, keys: string[]) => {
+  for (const key of keys) {
+    const value = obj?.[key];
 
-function formatTsh(amount: number) {
-  return `TSh ${amount.toLocaleString("en-TZ", { minimumFractionDigits: 2 })}`;
-}
+    if (value !== undefined && value !== null && value !== "") {
+      return value;
+    }
+  }
 
-// Icon per Quick Access card, keyed by href (stable across languages) —
-// same lookup-by-href convention cardDetail/cardActive below use.
-const CARD_ICONS: Record<string, ComponentType<SVGProps<SVGSVGElement>>> = {
-  "/insurance/plans": ShieldIcon,
-  "/savings": CoinsIcon,
-  "/notifications": BellIcon,
+  return null;
 };
 
-// Quick Access card: rounded-2xl/shadow-md/border, matching StatisticCard's
-// hover elevation. `active` toggles the emerald-tinted "real, current data"
-// treatment vs. the gray "coming soon / nothing to show yet" one — the
-// whole card stays one <Link> (not a nested <a>) for a single large,
-// keyboard-reachable target; "View Details" is a purely visual affordance
-// inside it, not a second interactive element.
-function QuickAccessCard({
-  href,
+const unwrap = (response: Data, keys: string[]): Data => {
+  let result = response;
+
+  for (const key of keys) {
+    if (result?.[key] && typeof result[key] === "object") {
+      result = result[key];
+    }
+  }
+
+  return result || {};
+};
+
+const display = (value: any) => {
+  if (value === null || value === undefined || value === "") {
+    return "Not available";
+  }
+
+  return String(value);
+};
+
+/* Remove hyphens and spaces from NIDA */
+
+const formatNida = (value: any) => {
+  if (!value) return "Not available";
+
+  return String(value).replace(/[-\s]/g, "");
+};
+
+/* Date formatting */
+
+const formatDate = (value: any) => {
+  if (!value) return "Not available";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return date.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+/* Currency formatting */
+
+const formatMoney = (value: any) => {
+  const amount = Number(value ?? 0);
+
+  if (!Number.isFinite(amount)) {
+    return "TZS 0.00";
+  }
+
+  return new Intl.NumberFormat("en-TZ", {
+    style: "currency",
+    currency: "TZS",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+};
+
+/* Registration and eligibility status */
+
+const getBooleanStatus = (
+  value: any,
+  positive: string,
+  negative: string
+) => {
+  if (typeof value === "boolean") {
+    return value ? positive : negative;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.toLowerCase().trim();
+
+    if (
+      [
+        "true",
+        "complete",
+        "completed",
+        "fully registered",
+        "eligible",
+        "active",
+        "yes",
+      ].includes(normalized)
+    ) {
+      return positive;
+    }
+
+    if (
+      [
+        "false",
+        "incomplete",
+        "pending",
+        "not eligible",
+        "not yet eligible",
+        "inactive",
+        "no",
+      ].includes(normalized)
+    ) {
+      return negative;
+    }
+  }
+
+  return "Not available";
+};
+
+/* -------------------------------------------------------
+ *   SECTION HEADING
+ * ------------------------------------------------------- */
+
+function SectionHeading({
   title,
-  subtitle,
-  detail,
-  active,
-  progress,
-  viewDetailsLabel,
+  description,
+  icon: Icon,
 }: {
-  href: string;
   title: string;
-  subtitle: string;
-  detail?: string;
-  active: boolean;
-  progress?: { percent: number; label: string };
-  viewDetailsLabel: string;
+  description: string;
+  icon: any;
 }) {
-  const Icon = CARD_ICONS[href] ?? WalletIcon;
-
   return (
-    <Link
-      href={href}
-      className={`group flex flex-col justify-between rounded-2xl border border-gray-100 p-6 shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 ${
-        active ? "bg-emerald-50" : "bg-gray-50"
-      }`}
-    >
-      <div>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xl font-semibold text-gray-900">{title}</p>
-            <p className="mt-1 text-sm text-gray-600">{subtitle}</p>
-          </div>
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-[#064E3B] shadow-sm">
-            <Icon className="h-5 w-5" />
-          </span>
-        </div>
+    <div className="mb-5 flex items-center gap-3">
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
+    <Icon size={20} />
+    </div>
 
-        {detail && (
-          <p
-            className={`mt-4 text-2xl font-bold ${
-              active ? "text-emerald-700" : "text-gray-400"
-            }`}
-          >
-            {detail}
-          </p>
-        )}
+    <div>
+    <h2 className="text-lg font-bold text-gray-800 dark:text-white">
+    {title}
+    </h2>
 
-        {progress && (
-          <div className="mt-4">
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white">
-              <div
-                className="h-full rounded-full bg-emerald-600"
-                style={{
-                  width: `${Math.min(100, Math.max(0, progress.percent))}%`,
-                }}
-              />
-            </div>
-            <p className="mt-1 text-xs text-gray-500">{progress.label}</p>
-          </div>
-        )}
-      </div>
-
-      <span className="mt-6 inline-flex w-fit items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-[#064E3B] shadow-sm transition group-hover:bg-emerald-100">
-        {viewDetailsLabel}
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          aria-hidden="true"
-          className="h-3.5 w-3.5 shrink-0 transition-transform group-hover:translate-x-0.5"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14m0 0l-6-6m6 6l-6 6" />
-        </svg>
-      </span>
-    </Link>
+    <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
+    {description}
+    </p>
+    </div>
+    </div>
   );
 }
 
-export default function DashboardPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const { language } = useLanguage();
-  const t = memberDashboardTranslations[language];
-  const ct = commonTranslations[language];
+/* -------------------------------------------------------
+ *   MEMBER INFORMATION CARD
+ *   Milk / cream colour design
+ * ------------------------------------------------------- */
 
-  // null: not resolved yet (show a spinner). false: the backend's
-  // membershipComplete flag (see members.service.ts's
-  // isMembershipComplete — gender + region + an active phone number) is
-  // false, and useMembershipGate is already redirecting to the
-  // completion form — nothing past this point (Overview's own fetches
-  // included) mounts in that case, only in the `true` branch, so no
-  // dashboard data fetch ever fires for an incomplete profile.
-  const membershipComplete = useMembershipGate("requireComplete");
+function InfoItem({
+  label,
+  value,
+  icon: Icon,
+}: {
+  label: string;
+  value: any;
+  icon: any;
+}) {
+  return (
+    <div className="rounded-xl border border-[#eee8d9] bg-[#faf7ed] p-4 transition-colors hover:border-[#dcd1b7] dark:border-gray-700 dark:bg-gray-800">
+    <div className="flex items-center gap-3">
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#f0ead8] text-[#806b43] dark:bg-gray-700 dark:text-amber-200">
+    <Icon size={19} />
+    </div>
 
-  const [wallet, setWallet] = useState<Wallet | null>(null);
-  const [activePolicy, setActivePolicy] = useState<InsurancePolicy | null>(null);
-  const [savings, setSavings] = useState<SavingsSummary | null>(null);
-  const [unreadCount, setUnreadCount] = useState(0);
+    <div className="min-w-0 flex-1">
+    <p className="text-xs font-medium text-[#887d68] dark:text-gray-400">
+    {label}
+    </p>
 
-  // "?welcome=1" is set by MobileMoneyAccountForm's post-completion
-  // redirect (see handleSubmit there) — a one-shot signal, not
-  // persisted state, so it's stripped from the URL right after reading
-  // it and never reappears on refresh/back-navigation.
-  const [showWelcomeBanner, setShowWelcomeBanner] = useState(
-    searchParams.get("welcome") === "1"
+    <p className="mt-1 break-words text-sm font-semibold text-[#514936] dark:text-gray-100">
+    {display(value)}
+    </p>
+    </div>
+    </div>
+    </div>
   );
+}
 
-  useEffect(() => {
-    if (searchParams.get("welcome") !== "1") {
-      return;
-    }
+/* -------------------------------------------------------
+ *   STATUS CARD
+ * ------------------------------------------------------- */
 
-    router.replace("/dashboard");
+function StatusItem({
+  label,
+  value,
+  description,
+}: {
+  label: string;
+  value: string;
+  description: string;
+}) {
+  const isPositive =
+  value === "Fully Registered" ||
+  value === "Eligible" ||
+  value === "Active";
 
-    const timeout = setTimeout(() => setShowWelcomeBanner(false), 6000);
-    return () => clearTimeout(timeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reads the param once on the mount that carries it
-  }, []);
+  const isNegative =
+  value === "Incomplete" ||
+  value === "Not Yet Eligible" ||
+  value === "Inactive";
 
-  const loadQuickAccessData = () => {
-    const token = getAccessToken();
+  const colorClass = isPositive
+  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400"
+  : isNegative
+  ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+  : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400";
 
-    if (!token) {
-      return;
-    }
-
-    const headers = { Authorization: `Bearer ${token}` };
-
-    fetch(`${API_URL}/members/wallet`, { headers })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => setWallet(data))
-      .catch(() => setWallet(null));
-
-    fetch(`${API_URL}/members/insurance`, { headers })
-      .then((response) => (response.ok ? response.json() : []))
-      .then((policies: InsurancePolicy[]) =>
-        setActivePolicy(
-          policies.find((policy) => policy.policy_status === "Active") ?? null
-        )
-      )
-      .catch(() => setActivePolicy(null));
-
-    fetch(`${API_URL}/members/savings-summary`, { headers })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => setSavings(data))
-      .catch(() => setSavings(null));
-
-    fetch(`${API_URL}/members/notifications?pageSize=1`, { headers })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => setUnreadCount(data?.unreadCount ?? 0))
-      .catch(() => setUnreadCount(0));
-  };
-
-  useEffect(() => {
-    if (membershipComplete !== true) {
-      return;
-    }
-
-    loadQuickAccessData();
-  }, [membershipComplete]);
-
-  // Wallet balance, active policy, savings, and unread count are all
-  // read-only here — safe to silently refresh on tab focus, same
-  // reasoning the Super-admin dashboard's own focus refresh uses. Same
-  // membershipComplete guard as above, for the same reason.
-  useEffect(() => {
-    if (membershipComplete !== true) {
-      return;
-    }
-
-    window.addEventListener("focus", loadQuickAccessData);
-    return () => window.removeEventListener("focus", loadQuickAccessData);
-  }, [membershipComplete]);
-
-  if (membershipComplete === null) {
-    return <MembershipGateSpinner label={t.loadingDashboard} />;
-  }
-
-  if (membershipComplete === false) {
-    // The redirect effect above is already navigating away — render the
-    // same spinner rather than any dashboard content/data fetch while
-    // that navigation completes.
-    return <MembershipGateSpinner label={t.loadingDashboard} />;
-  }
-
-  // Keyed by href (stable across languages) rather than the translated
-  // title, since t.cards's order/wording can change independently of
-  // which figure belongs on which card.
-  const cardDetail = (href: string): string | undefined => {
-    switch (href) {
-      case "/insurance/plans":
-        return activePolicy ? activePolicy.provider_name : t.noActivePolicy;
-      case "/savings":
-        return savings ? formatTsh(savings.totalSavedTzs) : undefined;
-      case "/notifications":
-        return unreadCount > 0
-          ? t.unreadTemplate.replace("{count}", String(unreadCount))
-          : t.allCaughtUp;
-      default:
-        return undefined;
-    }
-  };
-
-  // Emerald = real, current data; gray = nothing to show yet (no active
-  // policy, or notifications with nothing unread) — same active/inactive
-  // language the KPI cards above use.
-  const cardActive = (href: string): boolean => {
-    switch (href) {
-      case "/insurance/plans":
-        return !!activePolicy;
-      case "/savings":
-        return !!savings;
-      case "/notifications":
-        return unreadCount > 0;
-      default:
-        return false;
-    }
-  };
-
-  // A real, derived ratio — not a fabricated goal — since the backend
-  // has no wallet/savings "target" concept: what share of the current
-  // wallet balance the automatic micro-savings engine actually
-  // contributed, per the dual-mode savings design (every saving event
-  // ultimately credits the wallet via WalletsService.creditContribution).
-  const savingsProgress =
-    wallet && savings && wallet.balance > 0
-      ? Math.round((savings.totalSavedTzs / wallet.balance) * 100)
-      : null;
+  const Icon = isPositive
+  ? CheckCircle2
+  : isNegative
+  ? Clock3
+  : Activity;
 
   return (
-    <PageContainer>
+    <div className="rounded-xl border border-gray-100 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+    <div className="flex items-start justify-between gap-3">
+    <div>
+    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+    {label}
+    </p>
 
-      {/* "Membership verified successfully!" toast — one-shot, driven by
-          ?welcome=1 from MobileMoneyAccountForm's post-completion
-          redirect. Fixed/top-right so it overlays without shifting the
-          page layout underneath it. */}
-      {showWelcomeBanner && (
-        <div
-          role="status"
-          className="fixed right-4 top-4 z-50 flex items-start gap-3 rounded-lg border border-emerald-100 bg-white px-4 py-3 shadow-xl [animation:fade-in_0.3s_ease-out_forwards] motion-reduce:[animation:none]"
-        >
-          <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[#064E3B]">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2.5}
-              aria-hidden="true"
-              className="h-3.5 w-3.5"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-            </svg>
-          </span>
-          <p className="text-sm font-medium text-gray-900">
-            {t.membershipVerifiedToast}
-          </p>
-          <button
-            type="button"
-            onClick={() => setShowWelcomeBanner(false)}
-            aria-label={ct.close}
-            className="ml-2 shrink-0 rounded p-0.5 text-gray-400 transition hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              aria-hidden="true"
-              className="h-4 w-4"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      )}
+    <p className="mt-2 text-lg font-bold text-gray-800 dark:text-white">
+    {value}
+    </p>
+    </div>
 
-      {/* Breadcrumb */}
-      <nav aria-label="Breadcrumb" className="text-sm text-gray-500">
-        <span className="font-semibold text-gray-900">
-          {t.breadcrumbCurrent}
-        </span>
-      </nav>
+    <div
+    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${colorClass}`}
+    >
+    <Icon size={20} />
+    </div>
+    </div>
 
-      <h1 className="mt-2 text-3xl font-bold text-gray-900">
-        {t.welcomeHeading}
+    <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+    {description}
+    </p>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------
+ *   HEALTH FUND CARD
+ * ------------------------------------------------------- */
+
+function FundCard({
+  title,
+  value,
+  description,
+  icon: Icon,
+  featured = false,
+}: {
+  title: string;
+  value: string;
+  description: string;
+  icon: any;
+  featured?: boolean;
+}) {
+  return (
+    <div
+    className={`rounded-xl border p-5 ${
+      featured
+      ? "border-emerald-700 bg-emerald-700 text-white"
+      : "border-gray-100 bg-white text-gray-800 dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+    }`}
+    >
+    <div className="flex items-center justify-between gap-3">
+    <p
+    className={`text-sm font-medium ${
+      featured
+      ? "text-emerald-100"
+      : "text-gray-500 dark:text-gray-400"
+    }`}
+    >
+    {title}
+    </p>
+
+    <div
+    className={`flex h-10 w-10 items-center justify-center rounded-lg ${
+      featured
+      ? "bg-white/15 text-white"
+      : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400"
+    }`}
+    >
+    <Icon size={20} />
+    </div>
+    </div>
+
+    <p className="mt-5 break-words text-xl font-bold">
+    {value}
+    </p>
+
+    <p
+    className={`mt-2 text-xs ${
+      featured
+      ? "text-emerald-100"
+      : "text-gray-400 dark:text-gray-500"
+    }`}
+    >
+    {description}
+    </p>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------
+ *   MEMBER DASHBOARD PAGE
+ * ------------------------------------------------------- */
+
+export default function MemberDashboardPage() {
+  const [data, setData] = useState<DashboardData>({
+    member: {},
+    membership: {},
+  });
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  /* FETCH MEMBER INFORMATION */
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadDashboard = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const token = getAccessToken();
+
+        if (!token) {
+          throw new Error(
+            "Your session has expired. Please log in again."
+          );
+        }
+
+        const baseUrl = API_URL.replace(/\/$/, "");
+
+        const headers = {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        };
+
+        const [memberResponse, membershipResponse] =
+        await Promise.all([
+          fetch(`${baseUrl}/members/me`, { headers }),
+                          fetch(`${baseUrl}/members/membership`, { headers }),
+        ]);
+
+        if (!memberResponse.ok) {
+          throw new Error(
+            "Unable to retrieve member information."
+          );
+        }
+
+        if (!membershipResponse.ok) {
+          throw new Error(
+            "Unable to retrieve membership information."
+          );
+        }
+
+        const [memberResult, membershipResult] =
+        await Promise.all([
+          memberResponse.json(),
+                          membershipResponse.json(),
+        ]);
+
+        const member = unwrap(memberResult, [
+          "data",
+          "member",
+        ]);
+
+        const membership = unwrap(membershipResult, [
+          "data",
+          "membership",
+        ]);
+
+        if (!cancelled) {
+          setData({ member, membership });
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setError(
+            err.message || "Failed to load dashboard."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadDashboard();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /* LOADING STATE */
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
+      <div className="h-10 w-10 animate-spin rounded-full border-4 border-emerald-100 border-t-emerald-600" />
+
+      <p className="text-sm text-gray-500 dark:text-gray-400">
+      Loading your dashboard...
+      </p>
+      </div>
+    );
+  }
+
+  /* ERROR STATE */
+
+  if (error) {
+    return (
+      <div className="m-4 rounded-xl border border-red-200 bg-red-50 p-5 dark:border-red-900 dark:bg-red-950/30">
+      <div className="flex items-start gap-3">
+      <XCircle size={22} className="mt-1 text-red-600" />
+
+      <div>
+      <h2 className="font-semibold text-red-800 dark:text-red-300">
+      Dashboard loading error
+      </h2>
+
+      <p className="mt-2 text-sm text-red-700 dark:text-red-400">
+      {error}
+      </p>
+
+      <button
+      onClick={() => window.location.reload()}
+      className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+      >
+      Try Again
+      </button>
+      </div>
+      </div>
+      </div>
+    );
+  }
+
+  const { member, membership } = data;
+
+  /* MEMBER NAME */
+
+  const firstName = getValue(member, [
+    "firstName",
+    "first_name",
+  ]);
+
+  const middleName = getValue(member, [
+    "middleName",
+    "middle_name",
+  ]);
+
+  const lastName = getValue(member, [
+    "lastName",
+    "last_name",
+    "surname",
+  ]);
+
+  const composedName = [
+    firstName,
+    middleName,
+    lastName,
+  ]
+  .filter(Boolean)
+  .join(" ");
+
+  const fullName =
+  composedName ||
+  getValue(member, [
+    "fullName",
+    "full_name",
+    "name",
+  ]) ||
+  "Not available";
+
+    const greetingName =
+    firstName ||
+    String(fullName).trim().split(/\s+/)[0] ||
+    "Member";
+
+    const initials = String(fullName)
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+
+    /* MEMBER INFORMATION */
+
+    const nidaNumber = formatNida(
+      getValue(member, [
+        "nida",
+        "nidaNumber",
+        "nida_number",
+      ])
+    );
+
+    const email = getValue(member, [
+      "email",
+      "emailAddress",
+      "email_address",
+    ]);
+
+    const accountStatus = display(
+      getValue(member, [
+        "accountStatus",
+        "account_status",
+        "status",
+      ])
+    );
+
+    const registrationDate = formatDate(
+      getValue(member, [
+        "registrationDate",
+        "registration_date",
+        "createdAt",
+        "created_at",
+      ])
+    );
+
+    const memberId = getValue(member, [
+      "memberId",
+      "member_id",
+      "membershipNumber",
+      "membership_number",
+    ]);
+
+    /* REGISTRATION STATUS */
+
+    const registrationProgress = getBooleanStatus(
+      getValue(membership, [
+        "onboardingCompleted",
+        "onboarding_completed",
+        "registrationComplete",
+        "registration_complete",
+      ]) ??
+      getValue(member, [
+        "onboardingCompleted",
+        "onboarding_completed",
+      ]),
+      "Fully Registered",
+      "Incomplete"
+    );
+
+    /* HEALTHCARE ELIGIBILITY */
+
+    const healthcareAccess = getBooleanStatus(
+      getValue(membership, [
+        "healthcareEligible",
+        "healthcare_eligible",
+        "isEligible",
+        "is_eligible",
+        "eligibilityStatus",
+        "eligibility_status",
+      ]),
+      "Eligible",
+      "Not Yet Eligible"
+    );
+
+    const membershipStatus = display(
+      getValue(membership, [
+        "membershipStatus",
+        "membership_status",
+        "status",
+      ])
+    );
+
+    /* HEALTH FUND INFORMATION */
+
+    const walletBalance = getValue(membership, [
+      "walletBalance",
+      "wallet_balance",
+      "balance",
+    ]);
+
+    const totalContributions = getValue(membership, [
+      "totalContributions",
+      "total_contributions",
+      "totalContributed",
+      "total_contributed",
+    ]);
+
+    const lastContribution = getValue(membership, [
+      "lastContribution",
+      "last_contribution",
+      "lastContributionDate",
+      "last_contribution_date",
+    ]);
+
+    /* DASHBOARD DISPLAY */
+
+    return (
+      <main className="mx-auto w-full max-w-7xl space-y-8 px-4 py-6 sm:px-6 lg:px-8">
+
+      {/* WELCOME SECTION */}
+
+      <section className="rounded-2xl bg-gradient-to-r from-emerald-700 to-teal-700 p-6 text-white sm:p-8">
+      <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
+
+      <div>
+      <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-xs text-emerald-50">
+      <HeartPulse size={15} />
+      Tujitunze Health Savings
+      </div>
+
+      <p className="text-sm text-emerald-100">
+      Welcome back,
+      </p>
+
+      <h1 className="mt-1 text-2xl font-bold sm:text-3xl">
+      {greetingName}
       </h1>
 
-      {/* Overview + Insights — KPIs, balance/contribution/allocation
-          charts, and CSV/PDF export. See ./Overview.tsx, which renders
-          its own section headers for both. */}
-      <div className="mt-6">
-        <Overview />
+      <p className="mt-3 max-w-lg text-sm leading-6 text-emerald-50">
+      Manage your membership information and monitor
+      your health fund contributions from your personal dashboard.
+      </p>
       </div>
 
-      {/* Quick Access — Insurance, Savings, Notifications */}
-      <SectionHeader
-        title={t.quickAccessHeading}
-        subtitle={t.quickAccessSubtitle}
+      <div className="flex items-center gap-3 self-start rounded-xl bg-white/10 p-3 sm:self-center">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-lg font-bold text-emerald-700">
+      {initials || "M"}
+      </div>
+
+      <div>
+      <p className="font-semibold">
+      {display(fullName)}
+      </p>
+
+      <p className="mt-1 text-xs text-emerald-100">
+      Tujitunze Member
+      </p>
+      </div>
+      </div>
+
+      </div>
+      </section>
+
+      {/* MEMBER INFORMATION */}
+
+      <section>
+      <SectionHeading
+      title="Member Information"
+      description="Your registered personal and account information."
+      icon={UserRound}
       />
 
-      <div className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {t.cards.map((card) => (
-          <QuickAccessCard
-            key={card.title}
-            href={card.href}
-            title={card.title}
-            subtitle={card.subtitle}
-            detail={cardDetail(card.href)}
-            active={cardActive(card.href)}
-            viewDetailsLabel={t.viewDetails}
-            progress={
-              card.href === "/savings" && savingsProgress !== null
-                ? {
-                    percent: savingsProgress,
-                    label: t.savingsProgressTemplate.replace(
-                      "{percent}",
-                      String(savingsProgress)
-                    ),
-                  }
-                : undefined
-            }
-          />
-        ))}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+
+      <InfoItem
+      label="Full Name"
+      value={fullName}
+      icon={UserRound}
+      />
+
+      <InfoItem
+      label="NIDA Number"
+      value={nidaNumber}
+      icon={ShieldCheck}
+      />
+
+      <InfoItem
+      label="Email Address"
+      value={email}
+      icon={Mail}
+      />
+
+      <InfoItem
+      label="Account Status"
+      value={accountStatus}
+      icon={Activity}
+      />
+
+      <InfoItem
+      label="Registration Date"
+      value={registrationDate}
+      icon={CalendarDays}
+      />
+
+      </div>
+      </section>
+
+      {/* MEMBERSHIP AND HEALTHCARE ACCESS */}
+
+
+
+      {/* HEALTH FUND SUMMARY */}
+
+      <section>
+      <SectionHeading
+      title="Health Fund Summary"
+      description="Your available balance and contribution information."
+      icon={Wallet}
+      />
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+
+      <FundCard
+      title="Wallet Balance"
+      value={formatMoney(walletBalance)}
+      description="Your recorded health fund balance"
+      icon={Wallet}
+      featured
+      />
+
+      <FundCard
+      title="Total Contributions"
+      value={formatMoney(totalContributions)}
+      description="Your recorded total contributions"
+      icon={Coins}
+      />
+
+      <FundCard
+      title="Last Contribution"
+      value={formatDate(lastContribution)}
+      description="Date of your last recorded contribution"
+      icon={TrendingUp}
+      />
+
+      </div>
+      </section>
+
+      {/* FOOTER */}
+
+      <div className="flex flex-col items-center justify-between gap-2 border-t border-gray-100 pt-5 text-xs text-gray-400 dark:border-gray-800 sm:flex-row">
+      <p>
+      Tujitunze Health Savings & Insurance Management System
+      </p>
+
+      <p className="flex items-center gap-1.5">
+      <ShieldCheck size={14} />
+      Your membership information
+      </p>
       </div>
 
-    </PageContainer>
-  );
+      </main>
+    );
 }

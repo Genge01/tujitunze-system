@@ -14,7 +14,7 @@ function resolveApiUrl(): string {
   }
 
   if (typeof window !== "undefined") {
-    return `${window.location.protocol}//${window.location.hostname}:3012`;
+    return `${window.location.protocol}//${window.location.hostname}:3002`;
   }
 
   // Server-side (SSR) fallback — none of this file's callers actually

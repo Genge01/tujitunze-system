@@ -1,0 +1,71 @@
+
+const { Client } = require('pg');
+const bcrypt = require('bcrypt');
+const readline = require('readline');
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+});
+
+function ask(question) {
+  return new Promise(resolve => rl.question(question, resolve));
+}
+
+async function main() {
+  const firstName = await ask('First name: ');
+  const secondName = await ask('Second name (optional): ');
+  const surname = await ask('Surname: ');
+  const emailInput = await ask('Email address: ');
+  const nida = await ask('NIDA number: ');
+  const password = await ask('Password (will be hidden in terminal): ');
+
+  const email = emailInput.trim().toLowerCase() || null;
+
+  if (!firstName.trim() || !surname.trim() || !nida.trim() || !password) {
+    throw new Error('Required fields cannot be empty.');
+  }
+
+  if (!/^[0-9]{8}-[0-9]{5}-[0-9]{5}-[0-9]{2}$/.test(nida.trim())) {
+    throw new Error('NIDA format is invalid.');
+  }
+
+  if (password.length < 12) {
+    throw new Error('Use a password with at least 12 characters.');
+  }
+
+  const passwordHash = await bcrypt.hash(password, 12);
+
+  const client = new Client({
+    host: process.env.DB_HOST || 'localhost',
+    port: Number(process.env.DB_PORT || 5432),
+    user: process.env.DB_USERNAME || 'postgres',
+    password: process.env.DB_PASSWORD || 'postgres',
+    database: process.env.DB_DATABASE || 'tujitunze',
+  });
+
+  await client.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const role = await client.query(
+      `SELECT role_id FROM roles WHERE role_name = $1`,
+      ['Super-admin']
+    );
+
+    if (role.rowCount !== 1) {
+      throw new Error('Super-admin role is missing or duplicated.');
+    }
+
+    const user = await client.query(
+      `INSERT INTO users (
+        first_name, second_name, surname, email,
+        nida_number, password_hash, member_status,
+        email_verified, phone_verified
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, 'Active', TRUE, TRUE)
+      RETURNING user_id`,
+      [
+        firstName.trim(),
+        se

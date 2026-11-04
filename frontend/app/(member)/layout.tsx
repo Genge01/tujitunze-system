@@ -15,13 +15,10 @@ const BASE_NAV_ITEMS: readonly SidebarNavItem[] = [
   { labelKey: "dashboard", href: "/dashboard" },
   { labelKey: "savings", href: "/savings" },
   { labelKey: "insurance", href: "/insurance/plans" },
-  { labelKey: "membership", href: "/membership" },
   { labelKey: "notifications", href: "/notifications" },
-  { labelKey: "qrCode", href: "/qr" },
 ];
 
 const ACCOUNT_MANAGEMENT_ITEMS: readonly SidebarNavItem[] = [
-  { labelKey: "profile", href: "/profile" },
   { labelKey: "settings", href: "/settings" },
 ];
 
