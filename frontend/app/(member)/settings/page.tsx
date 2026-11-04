@@ -1669,7 +1669,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <PageContainer backHref="/profile" backLabel={t.backToProfile}>
+    <PageContainer>
 
       <div className="mx-auto max-w-2xl">
 
