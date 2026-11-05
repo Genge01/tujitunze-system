@@ -11,6 +11,8 @@ import {
   isTokenExpired,
 } from "@/lib/utils/permissions";
 
+import { API_URL } from "@/lib/utils/api";
+
 interface AuthState {
   userId: number | null;
   roles: string[];
@@ -19,7 +21,7 @@ interface AuthState {
   isLoading: boolean;
 }
 
-export function useAuth(): AuthState & { logout: () => void } {
+export function useAuth(): AuthState & { logout: () => Promise<void> } {
   const [state, setState] = useState<AuthState>({
     userId: null,
     roles: [],
@@ -41,6 +43,7 @@ export function useAuth(): AuthState & { logout: () => void } {
         isAuthenticated: false,
         isLoading: false,
       });
+
       return;
     }
 
@@ -53,17 +56,37 @@ export function useAuth(): AuthState & { logout: () => void } {
     });
   }, []);
 
-  const logout = () => {
-    sessionStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
-    sessionStorage.removeItem(AUTH_USER_STORAGE_KEY);
-    setState({
-      userId: null,
-      roles: [],
-      firstName: null,
-      isAuthenticated: false,
-      isLoading: false,
-    });
+  const logout = async (): Promise<void> => {
+    const token = getAccessToken();
+
+    try {
+      if (token) {
+        await fetch(`${API_URL}/auth/logout`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          credentials: "include",
+        });
+      }
+    } catch (error) {
+      console.error("Logout request failed:", error);
+    } finally {
+      sessionStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+      sessionStorage.removeItem(AUTH_USER_STORAGE_KEY);
+
+      setState({
+        userId: null,
+        roles: [],
+        firstName: null,
+        isAuthenticated: false,
+        isLoading: false,
+      });
+    }
   };
 
-  return { ...state, logout };
+  return {
+    ...state,
+    logout,
+  };
 }

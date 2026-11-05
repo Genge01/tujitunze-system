@@ -1,0 +1,875 @@
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
+
+import { DataSource, EntityManager } from 'typeorm';
+import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'node:crypto';
+
+import { User } from '../members/entities/user.entity';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import {
+  CreateAdministratorDto,
+  StaffRole,
+} from './dto/create-administrator.dto';
+
+interface RoleCountRow {
+  role_name: string;
+  count: number;
+}
+
+interface StatusCountRow {
+  status: string;
+  count: number;
+}
+
+interface AdministratorRow {
+  user_id: number;
+  first_name: string;
+  second_name: string | null;
+  surname: string;
+  email: string | null;
+  member_status: string;
+  account_status: string;
+  created_at: Date;
+  role_name: string;
+  bank_name: string | null;
+  operator_name: string | null;
+  provider_name: string | null;
+}
+
+interface TenantOption {
+  id: number;
+  name: string;
+}
+
+interface AccountRow {
+  user_id: number;
+  first_name: string;
+  second_name: string | null;
+  surname: string;
+  email: string | null;
+  nida_number: string;
+  account_status: string;
+}
+
+type InstitutionType =
+| 'banks'
+| 'telecom-operators'
+| 'insurance-providers';
+
+interface InstitutionQueryConfig {
+  table: string;
+  searchColumns: string[];
+  select: string;
+}
+
+const INSTITUTION_QUERIES: Record<
+InstitutionType,
+InstitutionQueryConfig
+> = {
+  banks: {
+    table: 'banks',
+    searchColumns: ['bank_name', 'bank_code', 'swift_code'],
+    select: `
+    bank_id AS id,
+    bank_name AS name,
+    bank_code AS "bankCode",
+    swift_code AS "swiftCode",
+    country_code AS "countryCode",
+    status,
+    contact_phone AS "contactPhone",
+    contact_email AS "contactEmail",
+    created_at AS "createdAt",
+    updated_at AS "updatedAt",
+    (api_endpoint IS NOT NULL AND api_endpoint <> '') AS "hasApiEndpoint",
+    (api_key_hash IS NOT NULL AND api_key_hash <> '') AS "hasApiCredentials",
+    (webhook_url IS NOT NULL AND webhook_url <> '') AS "hasWebhook"
+    `,
+  },
+
+  'telecom-operators': {
+    table: 'telecom_operators',
+    searchColumns: ['operator_name', 'country_code'],
+    select: `
+    operator_id AS id,
+    operator_name AS name,
+    country_code AS "countryCode",
+    status,
+    contact_phone AS "contactPhone",
+    contact_email AS "contactEmail",
+    created_at AS "createdAt",
+    updated_at AS "updatedAt",
+    (api_endpoint IS NOT NULL AND api_endpoint <> '') AS "hasApiEndpoint",
+    (api_key_hash IS NOT NULL AND api_key_hash <> '') AS "hasApiCredentials",
+    (webhook_url IS NOT NULL AND webhook_url <> '') AS "hasWebhook"
+    `,
+  },
+
+  'insurance-providers': {
+    table: 'insurance_providers',
+    searchColumns: ['provider_name', 'license_number'],
+    select: `
+    provider_id AS id,
+    provider_name AS name,
+    license_number AS "licenseNumber",
+    status,
+    contact_phone AS "contactPhone",
+    contact_email AS "contactEmail",
+    address,
+    created_at AS "createdAt"
+    `,
+  },
+};
+
+const TENANT_LOOKUP: Partial<
+Record<StaffRole, { table: string; pkColumn: string }>
+> = {
+  Bank: {
+    table: 'banks',
+    pkColumn: 'bank_id',
+  },
+  Telecom: {
+    table: 'telecom_operators',
+    pkColumn: 'operator_id',
+  },
+  Insurance: {
+    table: 'insurance_providers',
+    pkColumn: 'provider_id',
+  },
+};
+
+@Injectable()
+export class SuperAdminService {
+  constructor(
+    private readonly dataSource: DataSource,
+      private readonly auditLogsService: AuditLogsService,
+  ) {}
+
+  // ==========================================
+  // SUPER ADMIN DASHBOARD
+  // ==========================================
+
+  async getDashboard() {
+    const [
+      usersByRole,
+      banksByStatus,
+      operatorsByStatus,
+      providersByStatus,
+      [{ count: roleCount }],
+      [{ count: permissionCount }],
+      recentAuditLogCount,
+    ] = await Promise.all([
+      this.dataSource.query(
+        `SELECT r.role_name, COUNT(*)::int AS count
+        FROM member_roles mr
+        JOIN roles r ON r.role_id = mr.role_id
+        GROUP BY r.role_name`,
+      ) as Promise<RoleCountRow[]>,
+
+      this.countByStatus('banks'),
+                          this.countByStatus('telecom_operators'),
+                          this.countByStatus('insurance_providers'),
+
+                          this.dataSource.query(
+                            `SELECT COUNT(*)::int AS count FROM roles`,
+                          ) as Promise<{ count: number }[]>,
+
+                          this.dataSource.query(
+                            `SELECT COUNT(*)::int AS count FROM permissions`,
+                          ) as Promise<{ count: number }[]>,
+
+                          this.auditLogsService.countRecent(24),
+    ]);
+
+    return {
+      usersByRole: Object.fromEntries(
+        usersByRole.map((row) => [row.role_name, row.count]),
+      ),
+      banksByStatus,
+      operatorsByStatus,
+      providersByStatus,
+      roleCount,
+      permissionCount,
+      recentAuditLogCount,
+    };
+  }
+
+  // ==========================================
+  // LIST ADMINISTRATORS
+  // ==========================================
+
+  async listAdministrators() {
+    const rows = await this.dataSource.query(
+      `SELECT
+      u.user_id,
+      u.first_name,
+      u.second_name,
+      u.surname,
+      u.email,
+      u.member_status,
+      u.account_status,
+      u.created_at,
+      r.role_name,
+      b.bank_name,
+      t.operator_name,
+      ip.provider_name
+      FROM users u
+      JOIN member_roles mr ON mr.member_id = u.user_id
+      JOIN roles r ON r.role_id = mr.role_id
+      LEFT JOIN banks b ON b.bank_id = u.bank_id
+      LEFT JOIN telecom_operators t
+      ON t.operator_id = u.telecom_operator_id
+      LEFT JOIN insurance_providers ip
+      ON ip.provider_id = u.insurance_provider_id
+      WHERE r.role_name <> 'Member'
+    AND u.account_status <> 'Deleted'
+    ORDER BY u.created_at DESC`,
+    ) as AdministratorRow[];
+
+    return rows.map((row) => ({
+      userId: row.user_id,
+      firstName: row.first_name,
+      secondName: row.second_name,
+      surname: row.surname,
+      email: row.email,
+      status: row.member_status,
+      accountStatus: row.account_status,
+      createdAt: row.created_at,
+      role: row.role_name,
+      tenantName:
+      row.bank_name ??
+      row.operator_name ??
+      row.provider_name ??
+      null,
+    }));
+  }
+
+  // ==========================================
+  // LIST INSTITUTIONS
+  // ==========================================
+
+  async listInstitutions(
+    type: InstitutionType,
+    search?: string,
+    status?: string,
+    page = 1,
+    pageSize = 20,
+  ) {
+    const config = INSTITUTION_QUERIES[type];
+
+    if (!config) {
+      throw new BadRequestException('Invalid institution type');
+    }
+
+    const safePage = Math.max(1, page);
+    const safePageSize = Math.min(100, Math.max(1, pageSize));
+    const offset = (safePage - 1) * safePageSize;
+
+    const conditions: string[] = [];
+    const parameters: (string | number)[] = [];
+
+    if (search?.trim()) {
+      const searchTerm = `%${search.trim()}%`;
+
+      const searchConditions = config.searchColumns.map((column) => {
+        parameters.push(searchTerm);
+        return `${column} ILIKE $${parameters.length}`;
+      });
+
+      conditions.push(`(${searchConditions.join(' OR ')})`);
+    }
+
+    if (status?.trim()) {
+      parameters.push(status.trim());
+
+      conditions.push(
+        `LOWER(status::text) = LOWER($${parameters.length})`,
+      );
+    }
+
+    const whereClause = conditions.length
+    ? `WHERE ${conditions.join(' AND ')}`
+    : '';
+
+    const countRows = await this.dataSource.query(
+      `SELECT COUNT(*)::int AS total
+      FROM ${config.table}
+      ${whereClause}`,
+      parameters,
+    ) as { total: number }[];
+
+    const total = countRows[0]?.total ?? 0;
+
+    const rows = await this.dataSource.query(
+      `SELECT ${config.select}
+      FROM ${config.table}
+      ${whereClause}
+      ORDER BY name ASC
+      LIMIT $${parameters.length + 1}
+      OFFSET $${parameters.length + 2}`,
+      [...parameters, safePageSize, offset],
+    );
+
+    return {
+      data: rows,
+      pagination: {
+        total,
+        page: safePage,
+        pageSize: safePageSize,
+        totalPages: Math.ceil(total / safePageSize),
+      },
+    };
+  }
+
+  // ==========================================
+  // LIST AVAILABLE TENANTS
+  // ==========================================
+
+  async listTenants(): Promise<{
+    banks: TenantOption[];
+    telecomOperators: TenantOption[];
+    insuranceProviders: TenantOption[];
+  }> {
+    const [
+      banks,
+      telecomOperators,
+      insuranceProviders,
+    ] = await Promise.all([
+      this.dataSource.query(
+        `SELECT bank_id AS id, bank_name AS name
+        FROM banks
+        ORDER BY bank_name`,
+      ) as Promise<TenantOption[]>,
+
+      this.dataSource.query(
+        `SELECT operator_id AS id, operator_name AS name
+        FROM telecom_operators
+        ORDER BY operator_name`,
+      ) as Promise<TenantOption[]>,
+
+      this.dataSource.query(
+        `SELECT provider_id AS id, provider_name AS name
+        FROM insurance_providers
+        ORDER BY provider_name`,
+      ) as Promise<TenantOption[]>,
+    ]);
+
+    return {
+      banks,
+      telecomOperators,
+      insuranceProviders,
+    };
+  }
+
+  // ==========================================
+  // CREATE ADMINISTRATOR
+  // ==========================================
+
+  async createAdministrator(
+    dto: CreateAdministratorDto,
+    actorId: number,
+    ipAddress: string | null = null,
+  ) {
+    const tenantConfig = TENANT_LOOKUP[dto.role];
+
+    if (tenantConfig && !dto.tenantId) {
+      throw new BadRequestException(
+        `A ${dto.role} account requires a tenantId`,
+      );
+    }
+
+    if (!tenantConfig && dto.tenantId) {
+      throw new BadRequestException(
+        `A ${dto.role} account must not have a tenantId`,
+      );
+    }
+
+    return this.dataSource.transaction(async (manager) => {
+      if (tenantConfig && dto.tenantId) {
+        const tenantRows = await manager.query(
+          `SELECT ${tenantConfig.pkColumn} AS id
+          FROM ${tenantConfig.table}
+          WHERE ${tenantConfig.pkColumn} = $1`,
+          [dto.tenantId],
+        ) as { id: number }[];
+
+        if (!tenantRows[0]) {
+          throw new NotFoundException(
+            `No ${dto.role} tenant found with id ${dto.tenantId}`,
+          );
+        }
+      }
+
+      const email = dto.email.trim().toLowerCase();
+      const nidaNumber = dto.nidaNumber.trim();
+
+      const existingNida = await manager.findOne(User, {
+        where: { nidaNumber },
+      });
+
+      if (existingNida) {
+        throw new ConflictException(
+          'NIDA number is already registered',
+        );
+      }
+
+      const existingEmail = await manager.findOne(User, {
+        where: { email },
+      });
+
+      if (existingEmail) {
+        throw new ConflictException(
+          'Email is already registered',
+        );
+      }
+
+      const passwordHash = await bcrypt.hash(dto.password, 12);
+
+      const user = manager.create(User, {
+        firstName: dto.firstName.trim(),
+                                  secondName: dto.secondName?.trim() || null,
+                                  surname: dto.surname.trim(),
+                                  email,
+                                  nidaNumber,
+                                  passwordHash,
+                                  memberStatus: 'Active',
+                                  emailVerified: false,
+                                  phoneVerified: false,
+                                  bankId: dto.role === 'Bank' ? (dto.tenantId ?? null) : null,
+                                  telecomOperatorId:
+                                  dto.role === 'Telecom' ? (dto.tenantId ?? null) : null,
+                                  insuranceProviderId:
+                                  dto.role === 'Insurance' ? (dto.tenantId ?? null) : null,
+      });
+
+      const savedUser = await manager.save(User, user);
+
+      const roleRows = await manager.query(
+        `SELECT role_id
+        FROM roles
+        WHERE role_name = $1
+        LIMIT 1`,
+        [dto.role],
+      ) as { role_id: number }[];
+
+      const roleRow = roleRows[0];
+
+      if (!roleRow) {
+        throw new InternalServerErrorException(
+          `${dto.role} role is not configured`,
+        );
+      }
+
+      await manager.query(
+        `INSERT INTO member_roles (member_id, role_id)
+        VALUES ($1, $2)`,
+                          [savedUser.userId, roleRow.role_id],
+      );
+
+      await this.auditLogsService.record(manager, {
+        memberId: actorId,
+        actionType: 'staff_account.create',
+        affectedTable: 'users',
+        affectedRecordId: savedUser.userId,
+        newValue: {
+          email,
+          role: dto.role,
+          tenantId: dto.tenantId ?? null,
+        },
+        ipAddress,
+      });
+
+      const { passwordHash: _passwordHash, ...safeUser } = savedUser;
+
+      return {
+        ...safeUser,
+        role: dto.role,
+      };
+    });
+  }
+
+  // ==========================================
+  // DEACTIVATE ADMINISTRATOR
+  // ==========================================
+
+  async deactivateAdministrator(
+    userId: number,
+    actorId: number,
+    ipAddress: string | null = null,
+  ) {
+    if (userId === actorId) {
+      throw new BadRequestException(
+        'You cannot deactivate your own account.',
+      );
+    }
+
+    return this.dataSource.transaction(async (manager) => {
+      const userRows = await manager.query(
+        `SELECT
+        user_id,
+        first_name,
+        second_name,
+        surname,
+        email,
+        nida_number,
+        account_status
+        FROM users
+        WHERE user_id = $1
+        FOR UPDATE`,
+        [userId],
+      ) as AccountRow[];
+
+      const user = userRows[0];
+
+      if (!user) {
+        throw new NotFoundException(
+          'Administrator account not found.',
+        );
+      }
+
+      if (user.account_status === 'Deleted') {
+        throw new ConflictException(
+          'This account has already been deleted.',
+        );
+      }
+
+      if (user.account_status === 'Deactivated') {
+        throw new ConflictException(
+          'This account is already deactivated.',
+        );
+      }
+
+      await this.protectLastActiveSuperAdmin(manager, userId);
+
+      await manager.query(
+        `UPDATE users
+        SET account_status = 'Deactivated',
+        updated_at = NOW()
+        WHERE user_id = $1`,
+        [userId],
+      );
+
+      await this.revokeUserSessions(manager, userId);
+
+      await this.auditLogsService.record(manager, {
+        memberId: actorId,
+        actionType: 'staff_account.deactivate',
+        affectedTable: 'users',
+        affectedRecordId: userId,
+        oldValue: {
+          accountStatus: user.account_status,
+        },
+        newValue: {
+          accountStatus: 'Deactivated',
+          sessionsRevoked: true,
+        },
+        ipAddress,
+      });
+
+      return {
+        message: 'Administrator account deactivated successfully.',
+        userId,
+        accountStatus: 'Deactivated',
+      };
+    });
+  }
+
+  // ==========================================
+  // REACTIVATE ADMINISTRATOR
+  // ==========================================
+
+  async activateAdministrator(
+    userId: number,
+    actorId: number,
+    ipAddress: string | null = null,
+  ) {
+    return this.dataSource.transaction(async (manager) => {
+      const userRows = await manager.query(
+        `SELECT
+        user_id,
+        first_name,
+        second_name,
+        surname,
+        email,
+        nida_number,
+        account_status
+        FROM users
+        WHERE user_id = $1
+        FOR UPDATE`,
+        [userId],
+      ) as AccountRow[];
+
+      const user = userRows[0];
+
+      if (!user) {
+        throw new NotFoundException(
+          'Administrator account not found.',
+        );
+      }
+
+      if (user.account_status === 'Deleted') {
+        throw new ConflictException(
+          'A deleted account cannot be reactivated. Register a new account instead.',
+        );
+      }
+
+      if (user.account_status === 'Active') {
+        throw new ConflictException(
+          'This account is already active.',
+        );
+      }
+
+      await manager.query(
+        `UPDATE users
+        SET account_status = 'Active',
+        updated_at = NOW()
+        WHERE user_id = $1`,
+        [userId],
+      );
+
+      await this.auditLogsService.record(manager, {
+        memberId: actorId,
+        actionType: 'staff_account.activate',
+        affectedTable: 'users',
+        affectedRecordId: userId,
+        oldValue: {
+          accountStatus: user.account_status,
+        },
+        newValue: {
+          accountStatus: 'Active',
+        },
+        ipAddress,
+      });
+
+      return {
+        message: 'Administrator account reactivated successfully.',
+        userId,
+        accountStatus: 'Active',
+      };
+    });
+  }
+
+  // ==========================================
+  // DELETE / RETIRE ADMINISTRATOR
+  // ==========================================
+
+  async deleteAdministrator(
+    userId: number,
+    actorId: number,
+    ipAddress: string | null = null,
+  ) {
+    if (userId === actorId) {
+      throw new BadRequestException(
+        'You cannot delete your own account.',
+      );
+    }
+
+    return this.dataSource.transaction(async (manager) => {
+      const userRows = await manager.query(
+        `SELECT
+        user_id,
+        first_name,
+        second_name,
+        surname,
+        email,
+        nida_number,
+        account_status
+        FROM users
+        WHERE user_id = $1
+        FOR UPDATE`,
+        [userId],
+      ) as AccountRow[];
+
+      const user = userRows[0];
+
+      if (!user) {
+        throw new NotFoundException(
+          'Administrator account not found.',
+        );
+      }
+
+      if (user.account_status === 'Deleted') {
+        throw new ConflictException(
+          'This account has already been deleted.',
+        );
+      }
+
+      await this.protectLastActiveSuperAdmin(manager, userId);
+
+      const syntheticNida = await this.generateSyntheticNida(
+        manager,
+        userId,
+      );
+
+      await this.revokeUserSessions(manager, userId);
+
+      // Retire and anonymize the account instead of physically
+      // deleting the row. Historical foreign keys remain valid.
+      await manager.query(
+        `UPDATE users
+        SET first_name = 'Deleted',
+        second_name = NULL,
+        surname = 'Account',
+        email = NULL,
+        nida_number = $1,
+        gender = NULL,
+        date_of_birth = NULL,
+        address = NULL,
+        region = NULL,
+        district = NULL,
+        password_hash = $2,
+        email_verified = FALSE,
+        phone_verified = FALSE,
+        account_status = 'Deleted',
+        updated_at = NOW()
+        WHERE user_id = $3`,
+        [
+          syntheticNida,
+          randomBytes(64).toString('hex'),
+                          userId,
+        ],
+      );
+
+      await this.auditLogsService.record(manager, {
+        memberId: actorId,
+        actionType: 'staff_account.delete',
+        affectedTable: 'users',
+        affectedRecordId: userId,
+        oldValue: {
+          accountStatus: user.account_status,
+        },
+        newValue: {
+          accountStatus: 'Deleted',
+          identityAnonymized: true,
+          emailReleased: true,
+          nidaReleased: true,
+          sessionsRevoked: true,
+          historicalRecordsPreserved: true,
+        },
+        ipAddress,
+      });
+
+      return {
+        message:
+        'Administrator account deleted. Its email and NIDA can now be registered again.',
+        userId,
+        accountStatus: 'Deleted',
+        identityAnonymized: true,
+        historicalRecordsPreserved: true,
+      };
+    });
+  }
+
+  // ==========================================
+  // PRIVATE ACCOUNT HELPERS
+  // ==========================================
+
+  private async revokeUserSessions(
+    manager: EntityManager,
+    userId: number,
+  ): Promise<void> {
+    await manager.query(
+      `UPDATE sessions
+      SET session_status = 'Revoked',
+      logout_time = COALESCE(logout_time, NOW())
+      WHERE member_id = $1
+      AND session_status = 'Active'`,
+      [userId],
+    );
+  }
+
+  private async protectLastActiveSuperAdmin(
+    manager: EntityManager,
+    targetUserId: number,
+  ): Promise<void> {
+    const targetRoleRows = await manager.query(
+      `SELECT r.role_name
+      FROM member_roles mr
+      JOIN roles r ON r.role_id = mr.role_id
+      WHERE mr.member_id = $1
+      AND r.role_name = 'Super-admin'
+      LIMIT 1`,
+      [targetUserId],
+    ) as { role_name: string }[];
+
+    const targetRole = targetRoleRows[0];
+
+    if (!targetRole) {
+      return;
+    }
+
+    const activeAdmins = await manager.query(
+      `SELECT u.user_id
+      FROM users u
+      JOIN member_roles mr ON mr.member_id = u.user_id
+      JOIN roles r ON r.role_id = mr.role_id
+      WHERE r.role_name = 'Super-admin'
+    AND u.account_status = 'Active'
+    FOR UPDATE OF u`,
+    ) as { user_id: number }[];
+
+    if (
+      activeAdmins.length <= 1 &&
+      activeAdmins.some((admin) => admin.user_id === targetUserId)
+    ) {
+      throw new BadRequestException(
+        'You cannot deactivate or delete the last active Super Admin account.',
+      );
+    }
+  }
+
+  private async generateSyntheticNida(
+    manager: EntityManager,
+    userId: number,
+  ): Promise<string> {
+    // The generated identifier follows the database NIDA format.
+    // It is unique to the user ID and does not retain the original NIDA.
+    const paddedId = String(userId).padStart(10, '0');
+
+    for (let suffix = 0; suffix <= 99; suffix++) {
+      const candidate =
+      `99999999-${paddedId.slice(0, 5)}-` +
+      `${paddedId.slice(5, 10)}-${String(suffix).padStart(2, '0')}`;
+
+      const existing = await manager.query(
+        `SELECT user_id
+        FROM users
+        WHERE nida_number = $1
+        AND user_id <> $2
+        LIMIT 1`,
+        [candidate, userId],
+      ) as { user_id: number }[];
+
+      if (existing.length === 0) {
+        return candidate;
+      }
+    }
+
+    throw new ConflictException(
+      'Could not generate a unique anonymized NIDA identifier.',
+    );
+  }
+
+  // ==========================================
+  // PRIVATE INSTITUTION HELPER
+  // ==========================================
+
+  private async countByStatus(
+    table: 'banks' | 'telecom_operators' | 'insurance_providers',
+  ): Promise<Record<string, number>> {
+    const rows = await this.dataSource.query(
+      `SELECT status, COUNT(*)::int AS count
+      FROM ${table}
+      GROUP BY status`,
+    ) as StatusCountRow[];
+
+    return Object.fromEntries(
+      rows.map((row) => [row.status, row.count]),
+    );
+  }
+}

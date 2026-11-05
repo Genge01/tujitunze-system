@@ -3,7 +3,6 @@ import DashboardLayout from "@/components/dashboard/DashboardLayout";
 
 const NAV_ITEMS = [
   { labelKey: "dashboard", href: "/super-admin/dashboard" },
-  { labelKey: "administrators", href: "/super-admin/administrators" },
   { labelKey: "rolesPermissions", href: "/super-admin/roles" },
   { labelKey: "savingRules", href: "/super-admin/saving-rules" },
   { labelKey: "auditLogs", href: "/super-admin/audit-logs" },

@@ -50,7 +50,7 @@ export class User {
   @Column({
     name: 'nida_number',
     type: 'varchar',
-    length: 23, // 20 digits + 3 dashes, e.g. 20030707-35805-00002-26
+    length: 23,
     unique: true,
   })
   nidaNumber!: string;
@@ -108,6 +108,14 @@ export class User {
   memberStatus!: string;
 
   @Column({
+    name: 'account_status',
+    type: 'varchar',
+    length: 20,
+    default: 'Active',
+  })
+  accountStatus!: 'Active' | 'Deactivated' | 'Deleted';
+
+  @Column({
     name: 'email_verified',
     type: 'boolean',
     default: false,
@@ -121,10 +129,6 @@ export class User {
   })
   phoneVerified!: boolean;
 
-  // Staff tenant links — set only for a user whose member_roles include
-  // the matching role, so a role-scoped dashboard knows which bank/
-  // operator/provider is "their own." See database/migrations/
-  // 0004_add_staff_tenant_links.sql.
   @Column({
     name: 'bank_id',
     type: 'int',

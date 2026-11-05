@@ -1,0 +1,156 @@
+import {
+  Body,
+  Controller,
+  DefaultValuePipe,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+
+import type { Request } from 'express';
+import { Throttle } from '@nestjs/throttler';
+
+import { SuperAdminService } from './super-admin.service';
+import { CreateAdministratorDto } from './dto/create-administrator.dto';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import type { AuthenticatedUser } from '../auth/jwt.strategy';
+
+@Controller('super-admin')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('Super-admin')
+export class SuperAdminController {
+  constructor(
+    private readonly superAdminService: SuperAdminService,
+  ) {}
+
+  @Get('dashboard')
+  async getDashboard() {
+    return this.superAdminService.getDashboard();
+  }
+
+  @Get('institutions/banks')
+  async listBanks(
+    @Query('search') search?: string,
+                  @Query('status') status?: string,
+                  @Query('page', new DefaultValuePipe(1), ParseIntPipe)
+                  page?: number,
+                  @Query('pageSize', new DefaultValuePipe(20), ParseIntPipe)
+                  pageSize?: number,
+  ) {
+    return this.superAdminService.listInstitutions(
+      'banks',
+      search,
+      status,
+      page,
+      pageSize,
+    );
+  }
+
+  @Get('institutions/telecom-operators')
+  async listTelecomOperators(
+    @Query('search') search?: string,
+                             @Query('status') status?: string,
+                             @Query('page', new DefaultValuePipe(1), ParseIntPipe)
+                             page?: number,
+                             @Query('pageSize', new DefaultValuePipe(20), ParseIntPipe)
+                             pageSize?: number,
+  ) {
+    return this.superAdminService.listInstitutions(
+      'telecom-operators',
+      search,
+      status,
+      page,
+      pageSize,
+    );
+  }
+
+  @Get('institutions/insurance-providers')
+  async listInsuranceProviders(
+    @Query('search') search?: string,
+                               @Query('status') status?: string,
+                               @Query('page', new DefaultValuePipe(1), ParseIntPipe)
+                               page?: number,
+                               @Query('pageSize', new DefaultValuePipe(20), ParseIntPipe)
+                               pageSize?: number,
+  ) {
+    return this.superAdminService.listInstitutions(
+      'insurance-providers',
+      search,
+      status,
+      page,
+      pageSize,
+    );
+  }
+
+  @Get('administrators')
+  async listAdministrators() {
+    return this.superAdminService.listAdministrators();
+  }
+
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Post('administrators')
+  async createAdministrator(
+    @Body() body: CreateAdministratorDto,
+                            @CurrentUser() actor: AuthenticatedUser,
+                            @Req() request: Request,
+  ) {
+    return this.superAdminService.createAdministrator(
+      body,
+      actor.userId,
+      request.ip,
+    );
+  }
+
+  @Patch('administrators/:userId/deactivate')
+  async deactivateAdministrator(
+    @Param('userId', ParseIntPipe) userId: number,
+                                @CurrentUser() actor: AuthenticatedUser,
+                                @Req() request: Request,
+  ) {
+    return this.superAdminService.deactivateAdministrator(
+      userId,
+      actor.userId,
+      request.ip,
+    );
+  }
+
+  @Patch('administrators/:userId/activate')
+  async activateAdministrator(
+    @Param('userId', ParseIntPipe) userId: number,
+                              @CurrentUser() actor: AuthenticatedUser,
+                              @Req() request: Request,
+  ) {
+    return this.superAdminService.activateAdministrator(
+      userId,
+      actor.userId,
+      request.ip,
+    );
+  }
+
+  @Delete('administrators/:userId')
+  async deleteAdministrator(
+    @Param('userId', ParseIntPipe) userId: number,
+                            @CurrentUser() actor: AuthenticatedUser,
+                            @Req() request: Request,
+  ) {
+    return this.superAdminService.deleteAdministrator(
+      userId,
+      actor.userId,
+      request.ip,
+    );
+  }
+
+  @Get('tenants')
+  async listTenants() {
+    return this.superAdminService.listTenants();
+  }
+}

@@ -1,11 +1,7 @@
+
 import type { Language } from "@/lib/context/LanguageContext";
 
-// Staff-sidebar nav item labels, keyed by a stable slug rather than the
-// literal English text — layout.tsx files (server components) pass the
-// slug as `labelKey`, and Sidebar.tsx (client) resolves it here. Shared
-// slugs (e.g. "dashboard", "reports") intentionally cover multiple role
-// groups; role-specific labels (e.g. "bankProfile") are prefixed to avoid
-// collisions with a different group's page of a similar name.
+// Staff-sidebar navigation labels.
 export const navLabelTranslations = {
   en: {
     dashboard: "Dashboard",
@@ -28,6 +24,9 @@ export const navLabelTranslations = {
     contributionRules: "Contribution Rules",
     savingRules: "Saving Rules",
     administrators: "Administrators",
+    bankStaff: "Bank Staff",
+    telecomStaff: "Telecom Staff",
+    insuranceStaff: "Insurance Staff",
     rolesPermissions: "Roles & Permissions",
     financialReports: "Financial Reports",
     savings: "Savings",
@@ -60,6 +59,9 @@ export const navLabelTranslations = {
     contributionRules: "Kanuni za Michango",
     savingRules: "Kanuni za Akiba",
     administrators: "Wasimamizi",
+    bankStaff: "Watumishi wa Benki",
+    telecomStaff: "Watumishi wa Kampuni za Simu",
+    insuranceStaff: "Watumishi wa Bima",
     rolesPermissions: "Majukumu na Ruhusa",
     financialReports: "Ripoti za Fedha",
     savings: "Akiba",
@@ -92,8 +94,7 @@ export const roleLabelTranslations = {
   },
 } as const satisfies Record<Language, Record<string, string>>;
 
-// Generic strings reused across many pages/forms so they aren't
-// re-translated (and re-worded) six times over.
+// Generic strings reused across many pages/forms.
 export const commonTranslations = {
   en: {
     save: "Save",
