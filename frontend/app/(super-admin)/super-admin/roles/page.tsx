@@ -343,23 +343,7 @@ export default function SuperAdminRolesPage() {
     (role) => !CORE_ROLE_NAMES.includes(role.roleName)
   ).length;
 
-  const quickActions: QuickAction[] = [
-    {
-      label: dt.quickActionCreateAdministrator,
-      href: "/super-admin/administrators",
-      icon: PlusIcon,
-    },
-    {
-      label: dt.quickActionSavingRules,
-      href: "/super-admin/saving-rules",
-      icon: CoinsIcon,
-    },
-    {
-      label: dt.quickActionAuditLogs,
-      href: "/super-admin/audit-logs",
-      icon: ClipboardIcon,
-    },
-  ];
+  const quickActions: QuickAction[] = [];
 
   return (
     <div>

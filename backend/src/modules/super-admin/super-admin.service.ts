@@ -601,7 +601,8 @@ export class SuperAdminService {
         provider_id AS id,
         provider_name AS name
         FROM insurance_providers
-        ORDER BY provider_name`,
+       WHERE LOWER(provider_name) <> LOWER('Tujitunze Insurance')
+       ORDER BY provider_name`,
       ) as Promise<TenantOption[]>,
     ]);
 

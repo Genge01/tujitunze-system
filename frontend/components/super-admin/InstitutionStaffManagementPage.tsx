@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 import UserAccountListPage from "@/components/super-admin/UserAccountListPage";
 import { getAccessToken } from "@/lib/utils/permissions";
-import { formatNidaNumber } from "@/lib/utils/nida";
+import { formatNidaNumber, NIDA_FORMATTED_LENGTH } from "@/lib/utils/nida";
 import { API_URL } from "@/lib/utils/api";
 
 type StaffRole = "Bank" | "Telecom" | "Insurance";
@@ -559,7 +559,7 @@ export default function InstitutionStaffManagementPage({
                     )
                   }
                   required
-                  maxLength={20}
+                  maxLength={NIDA_FORMATTED_LENGTH}
                   autoComplete="off"
                   disabled={submitting}
                   className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-gray-100"

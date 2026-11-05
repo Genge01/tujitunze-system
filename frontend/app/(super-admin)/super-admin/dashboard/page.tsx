@@ -1156,7 +1156,7 @@ export default function SuperAdminDashboardPage() {
           role="Telecom"
           title="Telecom Staff"
           description="View, create and manage telecom staff accounts registered in Tujitunze."
-          institutionEndpoint="/super-admin/institutions/operators"
+          institutionEndpoint="/super-admin/institutions/telecom-operators"
           institutionLabel="Telecom operator"
           embedded
           totalCount={data.usersByRole["Telecom"] ?? 0}
@@ -1172,7 +1172,7 @@ export default function SuperAdminDashboardPage() {
           role="Insurance"
           title="Insurance Staff"
           description="View, create and manage insurance staff accounts registered in Tujitunze."
-          institutionEndpoint="/super-admin/institutions/providers"
+          institutionEndpoint="/super-admin/institutions/insurance-providers"
           institutionLabel="Insurance provider"
           embedded
           totalCount={data.usersByRole["Insurance"] ?? 0}
