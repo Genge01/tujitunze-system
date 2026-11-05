@@ -45,6 +45,7 @@ interface UserAccountListPageProps {
   category: ManagedAccountCategory;
   title: string;
   description: string;
+  embedded?: boolean;
 }
 
 const DEFAULT_PAGINATION: Pagination = {
@@ -140,6 +141,7 @@ export default function UserAccountListPage({
   category,
   title,
   description,
+  embedded = false,
 }: UserAccountListPageProps) {
   const router = useRouter();
 
@@ -354,7 +356,7 @@ export default function UserAccountListPage({
 
   return (
     <div>
-      <DashboardHeader title={title} />
+      {!embedded && <DashboardHeader title={title} />}
 
       <PageContainer maxWidth="6xl">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -371,13 +373,15 @@ export default function UserAccountListPage({
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => router.push("/super-admin/dashboard")}
-            className="cursor-pointer rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-gray-50"
-          >
-            Back to Dashboard
-          </button>
+          {!embedded && (
+            <button
+              type="button"
+              onClick={() => router.push("/super-admin/dashboard")}
+              className="cursor-pointer rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-gray-50"
+            >
+              Back to Dashboard
+            </button>
+          )}
         </div>
 
         <form

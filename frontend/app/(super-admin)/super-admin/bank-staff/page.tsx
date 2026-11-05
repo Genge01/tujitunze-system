@@ -1,11 +1,14 @@
-import UserAccountListPage from "@/components/super-admin/UserAccountListPage";
+import InstitutionStaffManagementPage from "@/components/super-admin/InstitutionStaffManagementPage";
 
 export default function BankStaffPage() {
   return (
-    <UserAccountListPage
-      category="bank-staff"
-      title="Bank Staff"
-      description="View and manage bank administrator accounts registered in Tujitunze."
+    <InstitutionStaffManagementPage
+    category="bank-staff"
+    role="Bank"
+    title="Bank Staff"
+    description="View, create and manage bank staff accounts registered in Tujitunze."
+    institutionEndpoint="/super-admin/institutions/banks"
+    institutionLabel="Bank"
     />
   );
 }

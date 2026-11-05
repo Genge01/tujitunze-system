@@ -12,6 +12,7 @@ import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import PageContainer from "@/components/dashboard/PageContainer";
 import StatGroup from "@/components/dashboard/StatGroup";
 import StatisticCard from "@/components/cards/StatisticCard";
+import InstitutionStaffManagementPage from "@/components/super-admin/InstitutionStaffManagementPage";
 
 import { useLanguage } from "@/lib/context/LanguageContext";
 import { superAdminDashboardTranslations } from "@/constants/translations/super-admin-dashboard";
@@ -57,6 +58,11 @@ interface AdminForm {
 }
 
 type AccountAction = "deactivate" | "activate" | "delete";
+
+type StaffPanel =
+  | "bank-staff"
+  | "telecom-staff"
+  | "insurance-staff";
 
 const EMPTY_ADMIN_FORM: AdminForm = {
   firstName: "",
@@ -132,6 +138,10 @@ export default function SuperAdminDashboardPage() {
 
   // Normal administrator listing.
   const [showAdmins, setShowAdmins] = useState(false);
+
+  // Inline institutional staff management.
+  const [activeStaffPanel, setActiveStaffPanel] =
+    useState<StaffPanel | null>(null);
 
   const [administrators, setAdministrators] =
   useState<Administrator[]>([]);
@@ -270,6 +280,7 @@ export default function SuperAdminDashboardPage() {
       return;
     }
 
+    setActiveStaffPanel(null);
     setShowAdmins(true);
 
     if (!adminsLoaded) {
@@ -626,9 +637,12 @@ export default function SuperAdminDashboardPage() {
       value={data.usersByRole["Bank"] ?? 0}
       icon={WalletIcon}
       hint="View and manage bank staff"
-      onClick={() =>
-        router.push("/super-admin/bank-staff")
-      }
+      onClick={() => {
+        setShowAdmins(false);
+        setActiveStaffPanel((current) =>
+          current === "bank-staff" ? null : "bank-staff"
+        );
+      }}
       />
 
       <StatisticCard
@@ -636,9 +650,12 @@ export default function SuperAdminDashboardPage() {
       value={data.usersByRole["Telecom"] ?? 0}
       icon={SignalIcon}
       hint="View and manage telecom staff"
-      onClick={() =>
-        router.push("/super-admin/telecom-staff")
-      }
+      onClick={() => {
+        setShowAdmins(false);
+        setActiveStaffPanel((current) =>
+          current === "telecom-staff" ? null : "telecom-staff"
+        );
+      }}
       />
 
       <StatisticCard
@@ -646,9 +663,12 @@ export default function SuperAdminDashboardPage() {
       value={data.usersByRole["Insurance"] ?? 0}
       icon={ShieldIcon}
       hint="View and manage insurance staff"
-      onClick={() =>
-        router.push("/super-admin/insurance-staff")
-      }
+      onClick={() => {
+        setShowAdmins(false);
+        setActiveStaffPanel((current) =>
+          current === "insurance-staff" ? null : "insurance-staff"
+        );
+      }}
       />
 
       </StatGroup>
@@ -1111,6 +1131,55 @@ export default function SuperAdminDashboardPage() {
           </div>
         )}
         </section>
+      )}
+
+      {/* INLINE INSTITUTIONAL STAFF MANAGEMENT */}
+      {activeStaffPanel === "bank-staff" && (
+        <InstitutionStaffManagementPage
+          category="bank-staff"
+          role="Bank"
+          title="Bank Staff"
+          description="View, create and manage bank staff accounts registered in Tujitunze."
+          institutionEndpoint="/super-admin/institutions/banks"
+          institutionLabel="Bank"
+          embedded
+          totalCount={data.usersByRole["Bank"] ?? 0}
+          onStaffCreated={() => {
+            void loadDashboard();
+          }}
+        />
+      )}
+
+      {activeStaffPanel === "telecom-staff" && (
+        <InstitutionStaffManagementPage
+          category="telecom-staff"
+          role="Telecom"
+          title="Telecom Staff"
+          description="View, create and manage telecom staff accounts registered in Tujitunze."
+          institutionEndpoint="/super-admin/institutions/operators"
+          institutionLabel="Telecom operator"
+          embedded
+          totalCount={data.usersByRole["Telecom"] ?? 0}
+          onStaffCreated={() => {
+            void loadDashboard();
+          }}
+        />
+      )}
+
+      {activeStaffPanel === "insurance-staff" && (
+        <InstitutionStaffManagementPage
+          category="insurance-staff"
+          role="Insurance"
+          title="Insurance Staff"
+          description="View, create and manage insurance staff accounts registered in Tujitunze."
+          institutionEndpoint="/super-admin/institutions/providers"
+          institutionLabel="Insurance provider"
+          embedded
+          totalCount={data.usersByRole["Insurance"] ?? 0}
+          onStaffCreated={() => {
+            void loadDashboard();
+          }}
+        />
       )}
 
       {/* INSTITUTION MANAGEMENT */}

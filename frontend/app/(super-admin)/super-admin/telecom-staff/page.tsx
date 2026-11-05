@@ -1,11 +1,14 @@
-import UserAccountListPage from "@/components/super-admin/UserAccountListPage";
+import InstitutionStaffManagementPage from "@/components/super-admin/InstitutionStaffManagementPage";
 
 export default function TelecomStaffPage() {
   return (
-    <UserAccountListPage
-      category="telecom-staff"
-      title="Telecom Staff"
-      description="View and manage telecom administrator accounts registered in Tujitunze."
+    <InstitutionStaffManagementPage
+    category="telecom-staff"
+    role="Telecom"
+    title="Telecom Staff"
+    description="View, create and manage telecom staff accounts registered in Tujitunze."
+    institutionEndpoint="/super-admin/institutions/telecom-operators"
+    institutionLabel="Telecom Operator"
     />
   );
 }

@@ -1,11 +1,14 @@
-import UserAccountListPage from "@/components/super-admin/UserAccountListPage";
+import InstitutionStaffManagementPage from "@/components/super-admin/InstitutionStaffManagementPage";
 
 export default function InsuranceStaffPage() {
   return (
-    <UserAccountListPage
-      category="insurance-staff"
-      title="Insurance Staff"
-      description="View and manage insurance administrator accounts registered in Tujitunze."
+    <InstitutionStaffManagementPage
+    category="insurance-staff"
+    role="Insurance"
+    title="Insurance Staff"
+    description="View, create and manage insurance staff accounts registered in Tujitunze."
+    institutionEndpoint="/super-admin/institutions/insurance-providers"
+    institutionLabel="Insurance Provider"
     />
   );
 }
