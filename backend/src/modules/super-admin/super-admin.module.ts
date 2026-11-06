@@ -8,8 +8,11 @@ import { SuperAdminSavingRulesController } from './super-admin-saving-rules.cont
 import { SuperAdminSavingRulesService } from './super-admin-saving-rules.service';
 import { AuditLogsModule } from '../audit-logs/audit-logs.module';
 
+import { AuthorizationModule } from '../auth/authorization.module';
+
 @Module({
-  imports: [AuditLogsModule],
+  imports: [
+    AuthorizationModule,AuditLogsModule],
   controllers: [
     SuperAdminController,
     SuperAdminRolesController,

@@ -5,8 +5,11 @@ import { Notification } from './entities/notification.entity';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
 
+import { AuthorizationModule } from '../auth/authorization.module';
+
 @Module({
-  imports: [TypeOrmModule.forFeature([Notification])],
+  imports: [
+    AuthorizationModule,TypeOrmModule.forFeature([Notification])],
 
   controllers: [NotificationsController],
 

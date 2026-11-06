@@ -9,8 +9,11 @@ import { AuditLogsModule } from '../audit-logs/audit-logs.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { WalletsModule } from '../wallets/wallets.module';
 
+import { AuthorizationModule } from '../auth/authorization.module';
+
 @Module({
-  imports: [AuditLogsModule, NotificationsModule, WalletsModule],
+  imports: [
+    AuthorizationModule,AuditLogsModule, NotificationsModule, WalletsModule],
   controllers: [BankController, BankWebhooksController],
   providers: [BankService, BankApiKeyGuard, BankWebhookSignatureGuard],
 })

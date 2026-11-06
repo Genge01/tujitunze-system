@@ -5,6 +5,8 @@ import { VodacomSessionKeyService } from './vodacom-session-key.service';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
+import { Permissions } from '../../auth/decorators/permissions.decorator';
+import { PermissionsGuard } from '../../auth/guards/permissions.guard';
 
 // Internal TUJITUNZE diagnostic — verifies TUJITUNZE's OWN backend can
 // reach Vodacom's sandbox and obtain a SessionKey. This is not a
@@ -17,13 +19,15 @@ import { RolesGuard } from '../../auth/guards/roles.guard';
 // Never returns the SessionKey itself — only safe, non-sensitive
 // diagnostic fields.
 @Controller('telecom/vodacom')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @Roles('Admin')
 export class VodacomDiagnosticController {
   constructor(
     private readonly sessionKeyService: VodacomSessionKeyService,
     private readonly configService: ConfigService,
   ) {}
+
+  @Permissions('settings:manage')
 
   @Get('test-connection')
   async testConnection() {

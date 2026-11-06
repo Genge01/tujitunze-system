@@ -4,8 +4,11 @@ import { InsuranceController } from './insurance.controller';
 import { InsuranceService } from './insurance.service';
 import { AuditLogsModule } from '../audit-logs/audit-logs.module';
 
+import { AuthorizationModule } from '../auth/authorization.module';
+
 @Module({
-  imports: [AuditLogsModule],
+  imports: [
+    AuthorizationModule,AuditLogsModule],
   controllers: [InsuranceController],
   providers: [InsuranceService],
 })

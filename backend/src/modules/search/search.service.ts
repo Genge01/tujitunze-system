@@ -104,10 +104,14 @@ export class SearchService {
     const pattern = toLikePattern(query);
 
     if (actor.roles.includes('Member')) {
-      return this.searchAsMember(actor.userId, pattern);
+      return this.searchAsMember(actor.userId, pattern, actor.permissions);
     }
 
     if (actor.roles.includes('Admin')) {
+      if (!actor.permissions.includes('members:manage')) {
+        return EMPTY_RESULTS;
+      }
+
       return this.searchAsAdmin(pattern);
     }
 
@@ -137,44 +141,57 @@ export class SearchService {
   private async searchAsMember(
     memberId: number,
     pattern: string,
+    permissions: string[],
   ): Promise<SearchResults> {
+    const canSearchWallet = permissions.includes('wallet:manage');
+    const canSearchInsurance = permissions.includes('member-insurance:view');
+    const canSearchNotifications = permissions.includes('notifications:manage');
+
     const [walletRows, insuranceRows, notificationRows] = await Promise.all([
-      this.dataSource.query<WalletSearchRow[]>(
-        `SELECT wt.wallet_transaction_id, wt.transaction_type, wt.amount,
-                wt.transaction_reference, wt.transaction_date
-         FROM wallet_transactions wt
-         INNER JOIN health_wallets hw ON hw.wallet_id = wt.wallet_id
-         WHERE hw.member_id = $1
-           AND (wt.transaction_type ILIKE $2 ESCAPE '\\'
-                OR wt.transaction_reference ILIKE $2 ESCAPE '\\'
-                OR wt.remarks ILIKE $2 ESCAPE '\\')
-         ORDER BY wt.transaction_date DESC
-         LIMIT ${RESULT_LIMIT}`,
-        [memberId, pattern],
-      ),
-      this.dataSource.query<InsuranceSearchRow[]>(
-        `SELECT mi.member_insurance_id, mi.policy_number, mi.policy_status,
-                ipr.provider_name
-         FROM member_insurance mi
-         INNER JOIN insurance_plans ip ON ip.plan_id = mi.plan_id
-         INNER JOIN insurance_providers ipr ON ipr.provider_id = ip.provider_id
-         WHERE mi.member_id = $1
-           AND (mi.policy_number ILIKE $2 ESCAPE '\\'
-                OR mi.policy_status ILIKE $2 ESCAPE '\\'
-                OR ipr.provider_name ILIKE $2 ESCAPE '\\')
-         ORDER BY mi.start_date DESC
-         LIMIT ${RESULT_LIMIT}`,
-        [memberId, pattern],
-      ),
-      this.dataSource.query<NotificationSearchRow[]>(
-        `SELECT notification_id, title, message, sent_date
-         FROM notifications
-         WHERE member_id = $1
-           AND (title ILIKE $2 ESCAPE '\\' OR message ILIKE $2 ESCAPE '\\')
-         ORDER BY sent_date DESC
-         LIMIT ${RESULT_LIMIT}`,
-        [memberId, pattern],
-      ),
+      canSearchWallet
+        ? this.dataSource.query<WalletSearchRow[]>(
+            `SELECT wt.wallet_transaction_id, wt.transaction_type, wt.amount,
+                    wt.transaction_reference, wt.transaction_date
+             FROM wallet_transactions wt
+             INNER JOIN health_wallets hw ON hw.wallet_id = wt.wallet_id
+             WHERE hw.member_id = $1
+               AND (wt.transaction_type ILIKE $2 ESCAPE '\\'
+                    OR wt.transaction_reference ILIKE $2 ESCAPE '\\'
+                    OR wt.remarks ILIKE $2 ESCAPE '\\')
+             ORDER BY wt.transaction_date DESC
+             LIMIT ${RESULT_LIMIT}`,
+            [memberId, pattern],
+          )
+        : Promise.resolve([] as WalletSearchRow[]),
+
+      canSearchInsurance
+        ? this.dataSource.query<InsuranceSearchRow[]>(
+            `SELECT mi.member_insurance_id, mi.policy_number, mi.policy_status,
+                    ipr.provider_name
+             FROM member_insurance mi
+             INNER JOIN insurance_plans ip ON ip.plan_id = mi.plan_id
+             INNER JOIN insurance_providers ipr ON ipr.provider_id = ip.provider_id
+             WHERE mi.member_id = $1
+               AND (mi.policy_number ILIKE $2 ESCAPE '\\'
+                    OR mi.policy_status ILIKE $2 ESCAPE '\\'
+                    OR ipr.provider_name ILIKE $2 ESCAPE '\\')
+             ORDER BY mi.start_date DESC
+             LIMIT ${RESULT_LIMIT}`,
+            [memberId, pattern],
+          )
+        : Promise.resolve([] as InsuranceSearchRow[]),
+
+      canSearchNotifications
+        ? this.dataSource.query<NotificationSearchRow[]>(
+            `SELECT notification_id, title, message, sent_date
+             FROM notifications
+             WHERE member_id = $1
+               AND (title ILIKE $2 ESCAPE '\\' OR message ILIKE $2 ESCAPE '\\')
+             ORDER BY sent_date DESC
+             LIMIT ${RESULT_LIMIT}`,
+            [memberId, pattern],
+          )
+        : Promise.resolve([] as NotificationSearchRow[]),
     ]);
 
     return {
@@ -200,6 +217,7 @@ export class SearchService {
       })),
     };
   }
+
 
   private async searchAsAdmin(pattern: string): Promise<SearchResults> {
     const memberRows = await this.dataSource.query<MemberSearchRow[]>(

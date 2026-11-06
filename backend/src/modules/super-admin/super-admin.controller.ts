@@ -32,8 +32,10 @@ type ManagedAccountRole =
   | 'Telecom'
   | 'Insurance';
 
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { Permissions } from '../auth/decorators/permissions.decorator';
 @Controller('super-admin')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @Roles('Super-admin')
 export class SuperAdminController {
   constructor(
@@ -44,6 +46,8 @@ export class SuperAdminController {
   // DASHBOARD
   // --------------------------------------------------
 
+  @Permissions('system:manage')
+
   @Get('dashboard')
   async getDashboard() {
     return this.superAdminService.getDashboard();
@@ -52,6 +56,8 @@ export class SuperAdminController {
   // --------------------------------------------------
   // INSTITUTION MANAGEMENT
   // --------------------------------------------------
+
+  @Permissions('integrations:manage')
 
   @Get('institutions/banks')
   async listBanks(
@@ -71,6 +77,7 @@ export class SuperAdminController {
     );
   }
 
+  @Permissions('integrations:manage')
   @Get('institutions/telecom-operators')
   async listTelecomOperators(
     @Query('search') search?: string,
@@ -89,6 +96,7 @@ export class SuperAdminController {
     );
   }
 
+  @Permissions('integrations:manage')
   @Get('institutions/insurance-providers')
   async listInsuranceProviders(
     @Query('search') search?: string,
@@ -112,6 +120,8 @@ export class SuperAdminController {
   // Preserve compatibility with the existing dashboard.
   // --------------------------------------------------
 
+  @Permissions('administrators:manage')
+
   @Get('administrators')
   async listAdministrators() {
     const result =
@@ -122,6 +132,7 @@ export class SuperAdminController {
   }
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Permissions('administrators:manage')
   @Post('administrators')
   async createAdministrator(
     @Body() body: CreateAdministratorDto,
@@ -135,6 +146,7 @@ export class SuperAdminController {
     );
   }
 
+  @Permissions('administrators:manage')
   @Patch('administrators/:userId/deactivate')
   async deactivateAdministrator(
     @Param('userId', ParseIntPipe) userId: number,
@@ -149,6 +161,7 @@ export class SuperAdminController {
     );
   }
 
+  @Permissions('administrators:manage')
   @Patch('administrators/:userId/activate')
   async activateAdministrator(
     @Param('userId', ParseIntPipe) userId: number,
@@ -163,6 +176,7 @@ export class SuperAdminController {
     );
   }
 
+  @Permissions('administrators:manage')
   @Delete('administrators/:userId')
   async deleteAdministrator(
     @Param('userId', ParseIntPipe) userId: number,
@@ -181,6 +195,7 @@ export class SuperAdminController {
   // ACCOUNT LISTS
   // --------------------------------------------------
 
+  @Permissions('administrators:manage')
   @Get('users/members')
   async listMembers(
     @Query('search') search?: string,
@@ -199,6 +214,7 @@ export class SuperAdminController {
     );
   }
 
+  @Permissions('administrators:manage')
   @Get('users/administrators')
   async listNormalAdministrators(
     @Query('search') search?: string,
@@ -217,6 +233,7 @@ export class SuperAdminController {
     );
   }
 
+  @Permissions('administrators:manage')
   @Get('users/bank-staff')
   async listBankStaff(
     @Query('search') search?: string,
@@ -235,6 +252,7 @@ export class SuperAdminController {
     );
   }
 
+  @Permissions('administrators:manage')
   @Get('users/telecom-staff')
   async listTelecomStaff(
     @Query('search') search?: string,
@@ -253,6 +271,7 @@ export class SuperAdminController {
     );
   }
 
+  @Permissions('administrators:manage')
   @Get('users/insurance-staff')
   async listInsuranceStaff(
     @Query('search') search?: string,
@@ -297,6 +316,7 @@ export class SuperAdminController {
     return resolvedRole;
   }
 
+  @Permissions('administrators:manage')
   @Patch('users/:role/:userId/deactivate')
   async deactivateManagedAccount(
     @Param('role') role: string,
@@ -314,6 +334,7 @@ export class SuperAdminController {
     );
   }
 
+  @Permissions('administrators:manage')
   @Patch('users/:role/:userId/activate')
   async activateManagedAccount(
     @Param('role') role: string,
@@ -331,6 +352,7 @@ export class SuperAdminController {
     );
   }
 
+  @Permissions('administrators:manage')
   @Delete('users/:role/:userId')
   async deleteManagedAccount(
     @Param('role') role: string,
@@ -352,6 +374,7 @@ export class SuperAdminController {
   // TENANTS
   // --------------------------------------------------
 
+  @Permissions('integrations:manage')
   @Get('tenants')
   async listTenants() {
     return this.superAdminService.listTenants();

@@ -15,15 +15,27 @@ import { ACCESS_TOKEN_COOKIE_NAME } from './auth-cookie.constants';
 export interface JwtPayload {
   sub: number;
   sid?: number;
-  roles: string[];
-  firstName: string;
+  roles?: string[];
+  firstName?: string;
 }
 
 export interface AuthenticatedUser {
   userId: number;
   sessionId?: number;
   roles: string[];
+  permissions: string[];
   firstName: string;
+}
+
+interface UserRecord {
+  user_id: number;
+  account_status: string;
+  first_name: string;
+}
+
+interface AuthorizationRecord {
+  role_name: string;
+  permission_name: string | null;
 }
 
 @Injectable()
@@ -52,10 +64,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Invalid authentication token.');
     }
 
-    // Confirm that the account is still active.
-    const users = await this.dataSource.query<
-    { user_id: number; account_status: string; first_name: string }[]
-    >(
+    // Verify that the account still exists and is active.
+    const users = await this.dataSource.query<UserRecord[]>(
       `
       SELECT user_id, account_status, first_name
       FROM users
@@ -74,15 +84,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     // Validate the database-backed session when the token contains a sid.
-    // Optional sid preserves compatibility with older tokens temporarily.
     if (payload.sid !== undefined) {
       if (!Number.isInteger(payload.sid) || payload.sid <= 0) {
         throw new UnauthorizedException('Invalid authentication session.');
       }
 
-      const sessions = await this.dataSource.query<
-      { session_id: number }[]
-      >(
+      const sessions = await this.dataSource.query<{ session_id: number }[]>(
         `
         SELECT session_id
         FROM sessions
@@ -102,10 +109,47 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       }
     }
 
+    // Always retrieve current roles and permissions from the database.
+    // Do not trust roles stored in an older JWT.
+    const authorizationRecords =
+    await this.dataSource.query<AuthorizationRecord[]>(
+      `
+      SELECT DISTINCT
+      r.role_name,
+      p.permission_name
+      FROM member_roles mr
+      INNER JOIN roles r
+      ON r.role_id = mr.role_id
+      LEFT JOIN role_permissions rp
+      ON rp.role_id = r.role_id
+      LEFT JOIN permissions p
+      ON p.permission_id = rp.permission_id
+      WHERE mr.member_id = $1
+      `,
+      [user.user_id],
+    );
+
+    const roles = [
+      ...new Set(
+        authorizationRecords
+        .map((record) => record.role_name)
+        .filter(Boolean),
+      ),
+    ];
+
+    const permissions = [
+      ...new Set(
+        authorizationRecords
+        .map((record) => record.permission_name)
+        .filter((permission): permission is string => Boolean(permission)),
+      ),
+    ];
+
     return {
       userId: user.user_id,
       sessionId: payload.sid,
-      roles: payload.roles ?? [],
+      roles,
+      permissions,
       firstName: payload.firstName ?? user.first_name,
     };
   }

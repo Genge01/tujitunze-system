@@ -29,22 +29,29 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
 
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { Permissions } from '../auth/decorators/permissions.decorator';
 @Controller('bank')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @Roles('Bank')
 export class BankController {
   constructor(private readonly bankService: BankService) {}
+
+  @Permissions('reports:view')
 
   @Get('dashboard')
   async getDashboard(@CurrentUser() user: AuthenticatedUser) {
     return this.bankService.getDashboard(user.userId);
   }
 
+  @Permissions('settings:manage')
+
   @Get('profile')
   async getProfile(@CurrentUser() user: AuthenticatedUser) {
     return this.bankService.getBankProfile(user.userId);
   }
 
+  @Permissions('settings:manage')
   @Patch('profile/contact')
   async updateContact(
     @CurrentUser() user: AuthenticatedUser,
@@ -55,6 +62,7 @@ export class BankController {
   }
 
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Permissions('settings:manage')
   @Post('profile/api-key/regenerate')
   async regenerateApiKey(
     @CurrentUser() user: AuthenticatedUser,
@@ -64,6 +72,7 @@ export class BankController {
   }
 
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Permissions('settings:manage')
   @Post('profile/webhook')
   async configureWebhook(
     @CurrentUser() user: AuthenticatedUser,
@@ -74,20 +83,26 @@ export class BankController {
   }
 
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Permissions('settings:manage')
   @Post('profile/connection-test')
   async testConnection(@CurrentUser() user: AuthenticatedUser) {
     return this.bankService.testConnection(user.userId);
   }
+
+  @Permissions('accounts:manage')
 
   @Get('branches')
   async listBranches(@CurrentUser() user: AuthenticatedUser) {
     return this.bankService.listBranches(user.userId);
   }
 
+  @Permissions('accounts:manage')
   @Get('fund-accounts')
   async listFundAccounts(@CurrentUser() user: AuthenticatedUser) {
     return this.bankService.listFundAccounts(user.userId);
   }
+
+  @Permissions('transfers:manage')
 
   @Post('fund-accounts/:type/transfer')
   async createFundTransfer(
@@ -104,6 +119,7 @@ export class BankController {
     );
   }
 
+  @Permissions('transfers:manage')
   @Get('fund-accounts/:type/transfers')
   async listFundTransfers(
     @CurrentUser() user: AuthenticatedUser,
@@ -121,6 +137,7 @@ export class BankController {
 
   // 20/min — a manual per-collection recording action, not a bulk feed.
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Permissions('transactions:manage')
   @Post('contributions')
   async recordContribution(
     @CurrentUser() user: AuthenticatedUser,
@@ -131,6 +148,7 @@ export class BankController {
   }
 
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Permissions('transactions:manage')
   @Patch('contributions/:id/reverse')
   async reverseContribution(
     @CurrentUser() user: AuthenticatedUser,
@@ -141,6 +159,7 @@ export class BankController {
   }
 
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Permissions('transactions:manage')
   @Patch('contributions/:id/fail')
   async markContributionFailed(
     @CurrentUser() user: AuthenticatedUser,
@@ -150,6 +169,7 @@ export class BankController {
     return this.bankService.markContributionFailed(user.userId, id, request.ip);
   }
 
+  @Permissions('transactions:manage')
   @Get('transactions')
   async listTransactions(
     @CurrentUser() user: AuthenticatedUser,
@@ -167,6 +187,7 @@ export class BankController {
     );
   }
 
+  @Permissions('transactions:manage')
   @Get('transactions/export')
   @Header('Content-Type', 'text/csv')
   @Header('Content-Disposition', 'attachment; filename="transactions.csv"')
@@ -178,6 +199,7 @@ export class BankController {
     return this.bankService.exportTransactionsCsv(user.userId, type, status);
   }
 
+  @Permissions('transactions:manage')
   @Patch('transactions/:id/status')
   async updateTransactionStatus(
     @CurrentUser() user: AuthenticatedUser,
@@ -193,6 +215,7 @@ export class BankController {
     );
   }
 
+  @Permissions('transactions:manage')
   @Post('settlements')
   async createSettlement(
     @CurrentUser() user: AuthenticatedUser,
@@ -202,6 +225,7 @@ export class BankController {
     return this.bankService.createSettlement(user.userId, body, request.ip);
   }
 
+  @Permissions('transactions:manage')
   @Patch('settlements/:id/complete')
   async completeSettlement(
     @CurrentUser() user: AuthenticatedUser,
@@ -211,6 +235,7 @@ export class BankController {
     return this.bankService.completeSettlement(user.userId, id, request.ip);
   }
 
+  @Permissions('transactions:manage')
   @Get('settlements')
   async listSettlements(
     @CurrentUser() user: AuthenticatedUser,
@@ -224,6 +249,8 @@ export class BankController {
     );
   }
 
+  @Permissions('reconciliation:manage')
+
   @Post('reconciliation/runs')
   async createReconciliationRun(
     @CurrentUser() user: AuthenticatedUser,
@@ -232,11 +259,13 @@ export class BankController {
     return this.bankService.createReconciliationRun(user.userId, body);
   }
 
+  @Permissions('reconciliation:manage')
   @Get('reconciliation/runs')
   async listReconciliationRuns(@CurrentUser() user: AuthenticatedUser) {
     return this.bankService.listReconciliationRuns(user.userId);
   }
 
+  @Permissions('reconciliation:manage')
   @Get('reconciliation/runs/:id')
   async getReconciliationRun(
     @CurrentUser() user: AuthenticatedUser,
@@ -245,6 +274,7 @@ export class BankController {
     return this.bankService.getReconciliationRun(user.userId, id);
   }
 
+  @Permissions('reports:view')
   @Get('reports')
   async getReports(
     @CurrentUser() user: AuthenticatedUser,
@@ -253,11 +283,14 @@ export class BankController {
     return this.bankService.getReports(user.userId, period);
   }
 
+  @Permissions('audit-logs:view')
+
   @Get('activity-logs')
   async listActivityLogs(@CurrentUser() user: AuthenticatedUser) {
     return this.bankService.listActivityLogs(user.userId);
   }
 
+  @Permissions('audit-logs:view')
   @Get('api-access-logs')
   async listApiAccessLogs(@CurrentUser() user: AuthenticatedUser) {
     return this.bankService.listApiAccessLogs(user.userId);

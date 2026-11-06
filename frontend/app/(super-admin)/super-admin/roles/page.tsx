@@ -237,7 +237,11 @@ export default function SuperAdminRolesPage() {
       }
 
       setRoles((prev) =>
-        prev.map((r) => (r.roleId === role.roleId ? (body as Role) : r))
+        prev.map((r) =>
+          r.roleId === role.roleId
+            ? { ...r, ...(body as Partial<Role>) }
+            : r
+        )
       );
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : t.savePermissionsError);

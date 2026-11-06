@@ -8,8 +8,11 @@ import { AdminReconciliationController } from './admin-reconciliation.controller
 import { AdminReconciliationService } from './admin-reconciliation.service';
 import { AuditLogsModule } from '../audit-logs/audit-logs.module';
 
+import { AuthorizationModule } from '../auth/authorization.module';
+
 @Module({
-  imports: [AuditLogsModule],
+  imports: [
+    AuthorizationModule,AuditLogsModule],
   controllers: [
     AdminController,
     AdminDashboardController,

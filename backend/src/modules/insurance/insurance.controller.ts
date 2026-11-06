@@ -20,11 +20,15 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
 
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { Permissions } from '../auth/decorators/permissions.decorator';
 @Controller('insurance')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @Roles('Insurance')
 export class InsuranceController {
   constructor(private readonly insuranceService: InsuranceService) {}
+
+  @Permissions('reports:view')
 
   @Get('dashboard')
   async getDashboard(@CurrentUser() user: AuthenticatedUser) {
@@ -37,10 +41,13 @@ export class InsuranceController {
   // this instead of separately calling GET /insurance/dashboard and
   // GET /insurance/contributions/summary (both kept, unchanged, for any
   // other/future consumer that wants just one narrower slice).
+  @Permissions('reports:view')
   @Get('dashboard/summary')
   async getDashboardSummary(@CurrentUser() user: AuthenticatedUser) {
     return this.insuranceService.getDashboardSummary(user.userId);
   }
+
+  @Permissions('claims:review')
 
   @Get('claims')
   async listClaims(
@@ -50,6 +57,7 @@ export class InsuranceController {
     return this.insuranceService.listClaims(user.userId, status);
   }
 
+  @Permissions('claims:review')
   @Patch('claims/:id/status')
   async updateClaimStatus(
     @CurrentUser() user: AuthenticatedUser,
@@ -65,6 +73,7 @@ export class InsuranceController {
     );
   }
 
+  @Permissions('reports:view')
   @Get('settlements')
   async listSettlements(
     @CurrentUser() user: AuthenticatedUser,
@@ -73,11 +82,13 @@ export class InsuranceController {
     return this.insuranceService.listSettlements(user.userId, status);
   }
 
+  @Permissions('reports:view')
   @Get('contributions/summary')
   async getContributionsSummary(@CurrentUser() user: AuthenticatedUser) {
     return this.insuranceService.getContributionsSummary(user.userId);
   }
 
+  @Permissions('reports:view')
   @Get('allocations')
   async listAllocations(
     @CurrentUser() user: AuthenticatedUser,
@@ -96,6 +107,7 @@ export class InsuranceController {
     );
   }
 
+  @Permissions('reports:view')
   @Get('allocations/:id/trace')
   async getAllocationTrace(
     @CurrentUser() user: AuthenticatedUser,
@@ -104,6 +116,7 @@ export class InsuranceController {
     return this.insuranceService.getAllocationTrace(user.userId, id);
   }
 
+  @Permissions('reports:view')
   @Get('reports')
   async getReports(
     @CurrentUser() user: AuthenticatedUser,

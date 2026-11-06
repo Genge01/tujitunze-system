@@ -24,8 +24,10 @@ import type { AuthenticatedUser } from '../auth/jwt.strategy';
 // Cross-channel (AIRTIME + BANK_TRANSFER in one place), distinct from the
 // existing per-operator/per-bank self-service reconciliation under
 // /telecom/reconciliation and /bank/reconciliation.
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { Permissions } from '../auth/decorators/permissions.decorator';
 @Controller('admin/reconciliation')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @Roles('Admin')
 export class AdminReconciliationController {
   constructor(
@@ -34,11 +36,13 @@ export class AdminReconciliationController {
 
   // Ad-hoc, unpersisted: answers the seven questions for one external
   // transaction on demand, without creating a run record.
+  @Permissions('reconciliation:manage')
   @Post('check')
   async checkSingle(@Body() body: ReconciliationCheckDto) {
     return this.adminReconciliationService.checkSingle(body);
   }
 
+  @Permissions('reconciliation:manage')
   @Post('runs')
   async createRun(
     @CurrentUser() user: AuthenticatedUser,
@@ -52,11 +56,13 @@ export class AdminReconciliationController {
     );
   }
 
+  @Permissions('reconciliation:manage')
   @Get('runs')
   async listRuns() {
     return this.adminReconciliationService.listRuns();
   }
 
+  @Permissions('reconciliation:manage')
   @Get('runs/:id')
   async getRun(@Param('id', ParseIntPipe) id: number) {
     return this.adminReconciliationService.getRun(id);

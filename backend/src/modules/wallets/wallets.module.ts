@@ -8,8 +8,11 @@ import { WalletsService } from './wallets.service';
 import { AuditLogsModule } from '../audit-logs/audit-logs.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 
+import { AuthorizationModule } from '../auth/authorization.module';
+
 @Module({
   imports: [
+    AuthorizationModule,
     TypeOrmModule.forFeature([HealthWallet, WalletTransaction]),
     AuditLogsModule,
     NotificationsModule,

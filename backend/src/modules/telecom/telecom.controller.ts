@@ -28,8 +28,10 @@ import type { AuthenticatedUser } from '../auth/jwt.strategy';
 import { VodacomC2BService } from './vodacom/vodacom-c2b.service';
 import { ReverseMpesaTransactionDto } from './dto/reverse-mpesa-transaction.dto';
 
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { Permissions } from '../auth/decorators/permissions.decorator';
 @Controller('telecom')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @Roles('Telecom')
 export class TelecomController {
   constructor(
@@ -37,16 +39,21 @@ export class TelecomController {
     private readonly vodacomC2BService: VodacomC2BService,
   ) {}
 
+  @Permissions('telecom-dashboard:view')
+
   @Get('dashboard')
   async getDashboard(@CurrentUser() user: AuthenticatedUser) {
     return this.telecomService.getDashboard(user.userId);
   }
+
+  @Permissions('settings:manage')
 
   @Get('operator')
   async getOperator(@CurrentUser() user: AuthenticatedUser) {
     return this.telecomService.getOperatorProfile(user.userId);
   }
 
+  @Permissions('settings:manage')
   @Patch('operator/contact')
   async updateOperatorContact(
     @CurrentUser() user: AuthenticatedUser,
@@ -62,6 +69,7 @@ export class TelecomController {
 
   // Tight limit — this issues a fresh credential every call.
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Permissions('settings:manage')
   @Post('operator/api-key/regenerate')
   async regenerateApiKey(
     @CurrentUser() user: AuthenticatedUser,
@@ -71,6 +79,7 @@ export class TelecomController {
   }
 
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Permissions('settings:manage')
   @Post('operator/webhook')
   async configureWebhook(
     @CurrentUser() user: AuthenticatedUser,
@@ -81,10 +90,13 @@ export class TelecomController {
   }
 
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Permissions('settings:manage')
   @Post('operator/connection-test')
   async testConnection(@CurrentUser() user: AuthenticatedUser) {
     return this.telecomService.testConnection(user.userId);
   }
+
+  @Permissions('customers:manage')
 
   @Get('members')
   async listMembers(
@@ -99,6 +111,7 @@ export class TelecomController {
   // matches the generosity of other write endpoints in this controller
   // while still bounding abuse.
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Permissions('transactions:manage')
   @Post('contributions')
   async recordContribution(
     @CurrentUser() user: AuthenticatedUser,
@@ -113,6 +126,7 @@ export class TelecomController {
   }
 
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Permissions('transactions:manage')
   @Patch('contributions/:id/reverse')
   async reverseContribution(
     @CurrentUser() user: AuthenticatedUser,
@@ -123,6 +137,7 @@ export class TelecomController {
   }
 
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Permissions('transactions:manage')
   @Patch('contributions/:id/fail')
   async markContributionFailed(
     @CurrentUser() user: AuthenticatedUser,
@@ -136,6 +151,7 @@ export class TelecomController {
     );
   }
 
+  @Permissions('transactions:manage')
   @Get('contributions')
   async listContributions(
     @CurrentUser() user: AuthenticatedUser,
@@ -151,6 +167,7 @@ export class TelecomController {
     );
   }
 
+  @Permissions('transactions:manage')
   @Get('contributions/export')
   @Header('Content-Type', 'text/csv')
   @Header('Content-Disposition', 'attachment; filename="contributions.csv"')
@@ -161,6 +178,7 @@ export class TelecomController {
     return this.telecomService.exportContributionsCsv(user.userId, status);
   }
 
+  @Permissions('settings:manage')
   @Get('contribution-rules')
   async listContributionRules() {
     return this.telecomService.listContributionRules();
@@ -170,11 +188,13 @@ export class TelecomController {
   // (POST /telecom/webhooks/resource-conversion) is operator-
   // authenticated (TelecomApiKeyGuard) and lives on
   // TelecomWebhooksController, same split as the contribution webhook.
+  @Permissions('payments:manage')
   @Get('resource-conversions/summary')
   async getResourceConversionsSummary(@CurrentUser() user: AuthenticatedUser) {
     return this.telecomService.getResourceConversionsSummary(user.userId);
   }
 
+  @Permissions('payments:manage')
   @Get('resource-conversions')
   async listResourceConversions(
     @CurrentUser() user: AuthenticatedUser,
@@ -191,6 +211,7 @@ export class TelecomController {
     );
   }
 
+  @Permissions('payments:manage')
   @Get('resource-conversions/:id')
   async getResourceConversion(
     @CurrentUser() user: AuthenticatedUser,
@@ -201,11 +222,13 @@ export class TelecomController {
 
   // Principle 2 — staff-facing read side, telecom-authenticated intake
   // only (see outgoing-transaction-diversion.types.ts).
+  @Permissions('payments:manage')
   @Get('outgoing-diversions/summary')
   async getOutgoingDiversionsSummary(@CurrentUser() user: AuthenticatedUser) {
     return this.telecomService.getOutgoingDiversionsSummary(user.userId);
   }
 
+  @Permissions('payments:manage')
   @Get('outgoing-diversions')
   async listOutgoingDiversions(
     @CurrentUser() user: AuthenticatedUser,
@@ -222,6 +245,8 @@ export class TelecomController {
     );
   }
 
+  @Permissions('reconciliation:manage')
+
   @Post('reconciliation/runs')
   async createReconciliationRun(
     @CurrentUser() user: AuthenticatedUser,
@@ -230,11 +255,13 @@ export class TelecomController {
     return this.telecomService.createReconciliationRun(user.userId, body);
   }
 
+  @Permissions('reconciliation:manage')
   @Get('reconciliation/runs')
   async listReconciliationRuns(@CurrentUser() user: AuthenticatedUser) {
     return this.telecomService.listReconciliationRuns(user.userId);
   }
 
+  @Permissions('reconciliation:manage')
   @Get('reconciliation/runs/:id')
   async getReconciliationRun(
     @CurrentUser() user: AuthenticatedUser,
@@ -242,6 +269,8 @@ export class TelecomController {
   ) {
     return this.telecomService.getReconciliationRun(user.userId, id);
   }
+
+  @Permissions('reports:view')
 
   @Get('reports')
   async getReports(
@@ -251,17 +280,21 @@ export class TelecomController {
     return this.telecomService.getReports(user.userId, period);
   }
 
+  @Permissions('audit-logs:view')
+
   @Get('activity-logs')
   async listActivityLogs(@CurrentUser() user: AuthenticatedUser) {
     return this.telecomService.listActivityLogs(user.userId);
   }
 
+  @Permissions('audit-logs:view')
   @Get('api-access-logs')
   async listApiAccessLogs(@CurrentUser() user: AuthenticatedUser) {
     return this.telecomService.listApiAccessLogs(user.userId);
   }
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Permissions('transactions:manage')
   @Post('mpesa/transactions/:id/query')
   async queryMpesaTransaction(
     @CurrentUser() user: AuthenticatedUser,
@@ -271,6 +304,7 @@ export class TelecomController {
   }
 
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Permissions('payments:manage')
   @Post('mpesa/transactions/:id/reversal')
   async reverseMpesaTransaction(
     @CurrentUser() user: AuthenticatedUser,

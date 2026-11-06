@@ -16,12 +16,17 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
+import { Permissions } from '../auth/decorators/permissions.decorator';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
 
 @Controller('members/notifications')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+
 @Roles('Member')
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
+
+  @Permissions('notifications:manage')
 
   @Get()
   async list(
@@ -32,6 +37,7 @@ export class NotificationsController {
     return this.notificationsService.listForMember(user.userId, page, pageSize);
   }
 
+  @Permissions('notifications:manage')
   @Patch(':id/read')
   async markRead(
     @CurrentUser() user: AuthenticatedUser,
@@ -40,11 +46,13 @@ export class NotificationsController {
     return this.notificationsService.markRead(user.userId, id);
   }
 
+  @Permissions('notifications:manage')
   @Patch('read-all')
   async markAllRead(@CurrentUser() user: AuthenticatedUser) {
     return this.notificationsService.markAllRead(user.userId);
   }
 
+  @Permissions('notifications:manage')
   @Delete(':id')
   async remove(
     @CurrentUser() user: AuthenticatedUser,

@@ -27,6 +27,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
 
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { Permissions } from '../auth/decorators/permissions.decorator';
 @Controller('members')
 export class MembersController {
   constructor(private readonly membersService: MembersService) {}
@@ -39,15 +41,17 @@ export class MembersController {
     return this.membersService.register(body);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('Member')
+  @Permissions('profile:manage')
   @Get('me')
   async me(@CurrentUser() user: AuthenticatedUser) {
     return this.membersService.getProfile(user.userId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('Member')
+  @Permissions('profile:manage')
   @Patch('me')
   async updateProfile(
     @CurrentUser() user: AuthenticatedUser,
@@ -79,8 +83,9 @@ export class MembersController {
   // 10/min per IP — guards against linking-spam even though this route is
   // authenticated.
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('Member')
+  @Permissions('profile:manage')
   @Post('phone-numbers')
   async addPhoneNumber(
     @CurrentUser() user: AuthenticatedUser,
@@ -90,8 +95,9 @@ export class MembersController {
     return this.membersService.addPhoneNumber(user.userId, body, request.ip);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('Member')
+  @Permissions('profile:manage')
   @Post('bank-accounts')
   async addBankAccount(
     @CurrentUser() user: AuthenticatedUser,
@@ -102,8 +108,9 @@ export class MembersController {
   }
 
   // Unlink, not a hard delete — see MembersService.removePhoneNumber.
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('Member')
+  @Permissions('profile:manage')
   @Delete('phone-numbers/:id')
   async removePhoneNumber(
     @CurrentUser() user: AuthenticatedUser,
@@ -114,8 +121,9 @@ export class MembersController {
   }
 
   // Unlink, not a hard delete — see MembersService.removeBankAccount.
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('Member')
+  @Permissions('profile:manage')
   @Delete('bank-accounts/:id')
   async removeBankAccount(
     @CurrentUser() user: AuthenticatedUser,
@@ -127,8 +135,9 @@ export class MembersController {
 
   // The other half of removePhoneNumber/removeBankAccount above — see
   // MembersService.reactivatePhoneNumber.
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('Member')
+  @Permissions('profile:manage')
   @Patch('phone-numbers/:id/reactivate')
   async reactivatePhoneNumber(
     @CurrentUser() user: AuthenticatedUser,
@@ -142,8 +151,9 @@ export class MembersController {
     );
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('Member')
+  @Permissions('profile:manage')
   @Patch('bank-accounts/:id/reactivate')
   async reactivateBankAccount(
     @CurrentUser() user: AuthenticatedUser,
@@ -160,8 +170,9 @@ export class MembersController {
   // Real hard delete — only reachable once already unlinked and only if
   // there's no financial history against it. See
   // MembersService.deletePhoneNumberPermanently.
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('Member')
+  @Permissions('profile:manage')
   @Delete('phone-numbers/:id/permanent')
   async deletePhoneNumberPermanently(
     @CurrentUser() user: AuthenticatedUser,
@@ -175,8 +186,9 @@ export class MembersController {
     );
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('Member')
+  @Permissions('profile:manage')
   @Delete('bank-accounts/:id/permanent')
   async deleteBankAccountPermanently(
     @CurrentUser() user: AuthenticatedUser,
@@ -190,8 +202,9 @@ export class MembersController {
     );
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('Member')
+  @Permissions('profile:manage')
   @Patch('me/password')
   async changePassword(
     @CurrentUser() user: AuthenticatedUser,
@@ -201,29 +214,33 @@ export class MembersController {
     return this.membersService.changePassword(user.userId, body, request.ip);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('Member')
+  @Permissions('profile:manage')
   @Get('membership')
   async membership(@CurrentUser() user: AuthenticatedUser) {
     return this.membersService.getMembership(user.userId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('Member')
+  @Permissions('wallet:manage')
   @Get('savings-summary')
   async savingsSummary(@CurrentUser() user: AuthenticatedUser) {
     return this.membersService.getSavingsSummary(user.userId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('Member')
+  @Permissions('wallet:manage')
   @Get('saving-consent')
   async savingConsent(@CurrentUser() user: AuthenticatedUser) {
     return this.membersService.getSavingConsent(user.userId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('Member')
+  @Permissions('wallet:manage')
   @Patch('saving-consent')
   async updateSavingConsent(
     @CurrentUser() user: AuthenticatedUser,
@@ -237,8 +254,9 @@ export class MembersController {
     );
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('Member')
+  @Permissions('profile:manage')
   @Patch('phone-numbers/:id/primary')
   async setPrimaryPhoneNumber(
     @CurrentUser() user: AuthenticatedUser,
@@ -252,29 +270,33 @@ export class MembersController {
     );
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('Member')
+  @Permissions('member-insurance:view')
   @Get('insurance')
   async insurance(@CurrentUser() user: AuthenticatedUser) {
     return this.membersService.listInsurance(user.userId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('Member')
+  @Permissions('member-insurance:view')
   @Get('insurance-allocations-summary')
   async insuranceAllocationsSummary(@CurrentUser() user: AuthenticatedUser) {
     return this.membersService.getInsuranceAllocationsSummary(user.userId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('Member')
+  @Permissions('member-insurance:view')
   @Get('claims')
   async claims(@CurrentUser() user: AuthenticatedUser) {
     return this.membersService.listClaims(user.userId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles('Member')
+  @Permissions('onboarding:manage')
   @Get('verifications')
   async verifications(@CurrentUser() user: AuthenticatedUser) {
     return this.membersService.listVerifications(user.userId);
