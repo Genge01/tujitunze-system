@@ -51,6 +51,7 @@ services:
   frontend:
     build: ./frontend
     restart: unless-stopped
+
     depends_on:
       - backend
     ports:

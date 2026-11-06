@@ -121,6 +121,7 @@ export default function LoginForm() {
         `${API_URL}/auth/login`,
         {
           method: "POST",
+          credentials: "same-origin",
           headers: {
             "Content-Type": "application/json",
           },

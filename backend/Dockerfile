@@ -1,15 +1,34 @@
-# Debian-based (not alpine): bcrypt's native binding has no musl
-# prebuilt, so alpine would need a full build toolchain just to
-# `npm install` it — slim ships glibc, which bcrypt has a prebuilt for.
-FROM node:20-slim
+
+# Production build
+FROM node:24-bookworm-slim AS builder
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 COPY . .
+RUN npm run build
 
-EXPOSE 3012
+# Production dependencies
+FROM node:24-bookworm-slim AS production-deps
 
-CMD ["npm", "run", "start:dev"]
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+
+# Production runtime
+FROM node:24-bookworm-slim AS runner
+
+ENV NODE_ENV=production
+
+WORKDIR /app
+
+COPY --from=production-deps /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/package.json ./package.json
+
+EXPOSE 3002
+
+CMD ["node", "dist/main.js"]
